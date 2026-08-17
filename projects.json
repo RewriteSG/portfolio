@@ -1,0 +1,35 @@
+{
+  "generated": "2026-08-17T17:23:00.029Z",
+  "projects": [
+    {
+      "id": "Driftwake",
+      "name": "Driftwake",
+      "description": "A 2D physics-driven sailing roguelike built solo in a custom engine. Every voyage rewrites the wind, the currents and the wreckage you can salvage from.",
+      "thumbnail": "./thumbnail.png",
+      "tags": [
+        "game",
+        "godot",
+        "c++",
+        "2d"
+      ],
+      "date": "2025-03-10",
+      "status": "completed",
+      "order": 10,
+      "media": [
+        {
+          "type": "image",
+          "src": "./thumbnail.png",
+          "caption": "Title screen"
+        },
+        {
+          "type": "image",
+          "src": "./screenshot1.png",
+          "caption": "Open water, storm rolling in"
+        }
+      ],
+      "links": {
+        "github": "https://github.com/you/driftwake"
+      }
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+name: Update project manifest
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "projects/**"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-manifest
+  cancel-in-progress: true
+
+jobs:
+  build-manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build projects.json
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+          const path = require('path');
+
+          const projectsDir = path.join(process.cwd(), 'projects');
+          const projects = [];
+
+          if (fs.existsSync(projectsDir)) {
+            for (const entry of fs.readdirSync(projectsDir, { withFileTypes: true })) {
+              if (!entry.isDirectory()) continue;
+              const indexPath = path.join(projectsDir, entry.name, 'index.json');
+              if (!fs.existsSync(indexPath)) continue;
+              try {
+                const data = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+                projects.push({ id: entry.name, ...data });
+              } catch (err) {
+                console.error(`Skipping ${indexPath}: ${err.message}`);
+                process.exitCode = 1;
+              }
+            }
+          }
+
+          projects.sort((a, b) => {
+            const orderA = typeof a.order === 'number' ? a.order : -Infinity;
+            const orderB = typeof b.order === 'number' ? b.order : -Infinity;
+            if (orderA !== orderB) return orderB - orderA;
+            const dateA = a.date ? Date.parse(a.date) : 0;
+            const dateB = b.date ? Date.parse(b.date) : 0;
+            return dateB - dateA;
+          });
+
+          const manifest = {
+            generated: new Date().toISOString(),
+            projects,
+          };
+
+          fs.writeFileSync('projects.json', JSON.stringify(manifest, null, 2) + '\n');
+          console.log(`Wrote projects.json with ${projects.length} project(s).`);
+          EOF
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- projects.json; then
+            echo "No changes to projects.json"
+            exit 0
+          fi
+          git add projects.json
+          git commit -m "chore: regenerate projects.json [skip ci]"
+          git push
