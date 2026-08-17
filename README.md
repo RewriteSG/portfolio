@@ -1,9 +1,9 @@
 # Portfolio
 
 A GitHub Pages portfolio that discovers projects from the `projects/` folder
-and renders them client-side. No frameworks, no build step — the only
-"build" is a GitHub Action that regenerates `projects.json` whenever
-`projects/**` changes on `main`.
+and renders them client-side as a single-page app. No frameworks, no build
+step — the only "build" is a GitHub Action that regenerates `projects.json`
+whenever `projects/**` changes on `main`.
 
 ## How it works
 
@@ -13,12 +13,26 @@ and renders them client-side. No frameworks, no build step — the only
   `.github/workflows/update-manifest.yml` walks all `projects/*/index.json`
   files, merges them into a single `projects.json` at the repo root (adding
   the folder name as `id`), and commits it back.
-- `index.html` and `project.html` fetch `./projects.json` once — no GitHub
-  API calls, no per-project requests, no rate-limit exposure no matter how
-  much traffic the site gets.
+- `index.html` fetches `./projects.json` once and renders everything —
+  home, work, about, contact, and each project's detail view — as a
+  single-page app with hash routing (`#/`, `#/work`, `#/about`,
+  `#/contact`, `#/project/<id>`). No GitHub API calls, no per-project
+  requests, no rate-limit exposure no matter how much traffic the site
+  gets.
+- `project.html?id=<name>` still works as a legacy link — it redirects to
+  `index.html#/project/<name>`.
 
 `projects.json` is generated — don't hand-edit it. Edits will be
 overwritten the next time the Action runs.
+
+## Design
+
+The site matches the original `bundled-backup.html` reference design: a
+CRT/terminal aesthetic on a near-black background with a glowing accent
+color (green by default, toggleable to amber or cyan via the button in the
+top-right corner). First visit shows an animated boot-log intro before
+landing on the home page; typed prompts and headings appear throughout.
+Project cards and the detail page support a hover-to-zoom image lightbox.
 
 ## Adding a new project
 
@@ -40,6 +54,11 @@ overwritten the next time the Action runs.
   "date": "2024-01-15",
   "status": "completed",
   "order": 10,
+  "subhead": "A one-line hook shown large on the detail page",
+  "long": "A longer paragraph shown next to the media gallery on the detail page.",
+  "stack": ["Unity", "C#", "FMOD"],
+  "code": "C#",
+  "commits": ["shipped v1.0", "fixed the storm shader"],
   "media": [
     { "type": "image", "src": "./screenshot1.png", "caption": "Track view" },
     { "type": "image", "src": "./screenshot2.png", "caption": "Garage menu" },
@@ -55,12 +74,17 @@ overwritten the next time the Action runs.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | yes | Display name |
-| `description` | string | yes | Short description |
+| `description` | string | yes | Short description — used as the card blurb, and as a fallback for `subhead`/`long` |
 | `thumbnail` | string | yes | Path to thumbnail image (relative to project folder) |
-| `tags` | string[] | no | Categorization tags (also used for grid filtering) |
+| `tags` | string[] | no | Categorization tags (also used for grid filtering); the first tag is shown as the card's pill label |
 | `date` | string | no | Release / completion date (ISO 8601) |
 | `status` | `"completed"` \| `"in-progress"` \| `"prototype"` | no | Badges WIP projects on the grid and detail page |
 | `order` | number | no | Manual sort/pin override (higher = earlier); falls back to `date` if omitted |
+| `subhead` | string | no | Large hook shown at the top of the detail page's description column; falls back to `name` |
+| `long` | string | no | Longer body text on the detail page; falls back to `description` |
+| `stack` | string[] | no | Tech-stack pills on the detail page; falls back to `tags` |
+| `code` | string | no | Short language/tech label shown on the card (e.g. `"C++"`); falls back to the second tag |
+| `commits` | string[] | no | Lines shown in the detail page's `commit_log/` terminal box; if omitted, generated from `status`/`tags`/`date` |
 | `media` | array | no | Images and videos shown in the project's gallery |
 | `links` | object | no | External links (`demo`, `github`, `itch.io`, etc.) |
 
@@ -98,12 +122,12 @@ the checked-in copy up to date).
 ```
 portfolio/
 ├── bundled-backup.html          # Original design (source of design/functionality reference)
-├── index.html                   # Main page — project grid
-├── project.html                 # Detail page (?id= query param)
+├── index.html                   # Single-page app shell — home/work/about/contact/detail
+├── project.html                 # Legacy redirect: ?id=X → index.html#/project/X
 ├── projects.json                # Auto-generated manifest — do not edit by hand
 ├── assets/
-│   ├── style.css                # Dark terminal theme, responsive layout
-│   └── app.js                   # Fetch/render/filter/lightbox logic
+│   ├── style.css                # CRT terminal theme, responsive layout
+│   └── app.js                   # Routing/render/filter/lightbox/intro/shader logic
 ├── projects/
 │   └── Driftwake/
 │       ├── index.json
@@ -113,8 +137,13 @@ portfolio/
 └── README.md
 ```
 
-## Known tradeoff
+## Known tradeoffs
 
-Since content renders client-side via JS, individual project pages don't
-get per-project Open Graph tags, so social-media link previews will be
-generic rather than project-specific.
+- Since content renders client-side via JS, individual project pages don't
+  get per-project Open Graph tags, so social-media link previews will be
+  generic rather than project-specific.
+- The animated CRT boot intro plays once per browser session
+  (`sessionStorage`) and can be replayed anytime via the `./intro.sh`
+  button in the header.
+- The contact form has no backend (this is a static site) — submitting it
+  opens the visitor's email client via a pre-filled `mailto:` link.

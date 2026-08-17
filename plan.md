@@ -1,5 +1,12 @@
 # Portfolio GitHub Pages — Project Plan
 
+> **Update:** the site was rebuilt for full design fidelity against
+> `bundled-backup.html` — see the "Design fidelity rebuild" section at the
+> bottom. The original plan below is kept for historical context; the
+> file-structure and step list have since diverged (single-page app
+> instead of separate `index.html`/`project.html` pages — `project.html`
+> is now just a legacy redirect).
+
 ## Overview
 Build a GitHub Pages site that discovers and displays projects from a `projects/` folder structure. Project data is compiled into a single `projects.json` manifest by a GitHub Action on every push, so the live site never calls the GitHub API and has no rate-limit exposure. Focused on showcasing games and interactive apps.
 
@@ -83,7 +90,7 @@ portfolio/
 
 Produced by `.github/workflows/update-manifest.yml`, which triggers on every push to `main` that touches `projects/**`, walks each `projects/<Name>/index.json`, merges them (adding the folder name as `id`) into one array, and commits `projects.json` back to the repo root. The live site fetches this single file — no GitHub API calls, no per-project requests, no rate limit exposure regardless of traffic.
 
-## Steps
+## Steps (original)
 
 ### Step 1 — Backup existing file
 - Rename `index.html` → `bundled-backup.html`
@@ -94,58 +101,59 @@ Produced by `.github/workflows/update-manifest.yml`, which triggers on every pus
 - Reference video via an external embed URL, not a committed file
 
 ### Step 3 — Create `assets/style.css`
-- Dark theme (background: `#0a0a0f`, accent: `#33ff99`)
-- Responsive CSS Grid for project cards
-- Project detail page styling (media gallery, lightbox for images with Esc-to-close and arrow-key navigation)
-- Tag-filter pill row on the main grid (click a tag to filter)
-- Status badge styling (e.g. "in-progress" ribbon)
-- Mobile-friendly breakpoints
+- Dark theme, responsive CSS Grid, lightbox, tag filters, status badges, mobile breakpoints
 
 ### Step 4 — Create `.github/workflows/update-manifest.yml`
-- Triggers on push to `main` when `projects/**` changes
-- Script (Node or a shell + `jq` step) walks `projects/*/index.json`, merges into `projects.json` with each folder name added as `id`
-- Commits the updated `projects.json` back to `main`
+- Triggers on push to `main` when `projects/**` changes, merges `projects/*/index.json` into `projects.json`
 
 ### Step 5 — Create `index.html` (main page)
-- On load, fetch `./projects.json` (same-origin, no API, no auth, no rate limit)
-- Sort by `order` (if present) then `date`
-- Render responsive card grid:
-  - Thumbnail image, loaded directly from its repo path (or `raw.githubusercontent.com` if not served via Pages)
-  - Project name
-  - Description (truncated)
-  - Tags as clickable filter pills
-  - Status badge if `status` is `"in-progress"` or `"prototype"`
-  - Click → navigates to `project.html?id={id}`
-- Loading state while fetching
-- Error state if `projects.json` is missing/malformed
-- Dark terminal-style aesthetic (monospace font, green accent)
-
 ### Step 6 — Create `project.html` (detail page)
-- Read `?id=` from URL params
-- Fetch `./projects.json`, find the matching entry client-side (still just one request)
-- Render:
-  - Back button → `index.html`
-  - Project name (large heading)
-  - Description
-  - Tags, status badge
-  - Media gallery:
-    - Images: displayed inline, click to expand (lightbox)
-    - Videos: embedded player (iframe for YouTube/itch.io, or HTML5 `<video>` if a direct URL)
-  - External links (demo, github, etc.)
-- 404 state if project id not found
-
 ### Step 7 — Create `README.md`
-- How to add a new project:
-  1. Create folder `projects/YourGame/`
-  2. Add `index.json` following the schema
-  3. Add image files in the same folder; host any video externally and link it
-  4. Push to `main` — the Action rebuilds `projects.json` automatically, site picks it up on next load
-- Schema reference
-- Note that `projects.json` is generated — don't hand-edit it, edits will be overwritten on next push
 
-## Design Notes
-- **Font**: JetBrains Mono (monospace, loaded from Google Fonts)
-- **Color palette**: `#0a0a0f` bg, `#111` cards, `#33ff99` accent, `#ccc` text
-- **No frameworks**: Vanilla HTML/CSS/JS only
-- **No client-side build step**: everything the browser does is static-file fetch + render; the only "build" is the GitHub Action regenerating `projects.json`, which is free (unlimited Actions minutes on public repos) and removes all GitHub API rate-limit risk from the live site
-- **Known tradeoff accepted**: since content renders client-side via JS, individual project pages won't have per-project Open Graph tags, so social-media link previews will be generic rather than project-specific. Not fixed in this plan.
+## Design Notes (original, superseded — see below)
+- **Font**: JetBrains Mono
+- **Color palette (original draft)**: `#0a0a0f` bg, `#111` cards, `#33ff99` accent, `#ccc` text — this was later corrected to match `bundled-backup.html`'s actual near-black `#050705` bg and softer green text
+- **No frameworks, no build step**
+
+---
+
+## Design fidelity rebuild
+
+`bundled-backup.html` is the actual visual/functional reference — a single-page
+CRT-terminal-themed app (WebGL shader background, animated boot-log intro,
+typed headings/prompts, accent color toggle, hover-zoom lightbox, a real
+contact form, and a dedicated About page) — and the first implementation of
+this site diverged from it significantly (different palette, separate
+`index.html`/`project.html` pages instead of an SPA, no intro, no About
+page, no accent toggle, no commit-log section).
+
+The rebuild:
+
+- Extracted the true design spec from `bundled-backup.html`'s bundled
+  template/style (colors, component classes, page states, animations).
+- Rewrote `assets/style.css` around the near-black (`#050705`) background,
+  soft-green (`#9fd9b8`) body text, glowing accent (`#33ff99`, toggleable
+  to amber/cyan), and the `term-btn`/`term-tag`/`term-card`/`term-tabs`/
+  `term-input` component classes from the reference.
+- Rewrote `index.html` as a single-page shell containing all four sections
+  (home/work/about/contact) plus the project-detail view and lightbox,
+  driven entirely by `projects.json` — the real project data pipeline
+  from the original plan, not the reference's hardcoded demo projects.
+- Rewrote `assets/app.js`: hash-based router (`#/`, `#/work`, `#/about`,
+  `#/contact`, `#/project/<id>`), a WebGL background shader, a
+  procedurally-generated boot log (using the real project list) for the
+  intro sequence, typing animations for prompts/headings, an accent-color
+  toggle persisted to `localStorage`, hover-zoom + lightbox on project
+  images, and a `commit_log/` section on the detail page derived from real
+  project fields (status/tags/date) rather than fabricated commit
+  messages.
+- `project.html` is now a thin redirect (`?id=X` → `index.html#/project/X`)
+  so old links keep working.
+- Extended the `index.json` schema with optional `subhead`, `long`,
+  `stack`, `code`, and `commits` fields for richer detail pages — all
+  optional, with sensible fallbacks to the existing required fields so
+  older project folders keep working unchanged.
+
+Verified locally with a static file server + Playwright screenshots across
+the intro, all four main pages, the amber/cyan accent toggle, the
+lightbox, and the `project.html` legacy redirect.

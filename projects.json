@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-17T17:31:09.056Z",
+  "generated": "2026-08-17T18:30:38.352Z",
   "projects": [
     {
       "id": "Driftwake",
@@ -15,6 +15,14 @@
       "date": "2025-03-10",
       "status": "completed",
       "order": 10,
+      "subhead": "A sailing roguelike where the sea is the opponent",
+      "long": "Driftwake pairs a hand-rolled 2D fluid simulation with roguelike run structure: every voyage rewrites the wind, the currents and the wreckage you can salvage from. Built the engine, tools and ship-building UI from scratch.",
+      "stack": [
+        "C++20",
+        "Godot 4",
+        "Box2D",
+        "GLSL"
+      ],
       "media": [
         {
           "type": "image",
