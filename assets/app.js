@@ -515,21 +515,29 @@
 
   /* -------------------- typing effect -------------------- */
 
-  function typeInto(el, text, speed, withCaret) {
+  // Matches the reference's typeKey(): organic per-character jitter
+  // (26-60ms) via recursive setTimeout, not a uniform fixed-interval tick,
+  // plus an initial ~30ms pause before the first character appears.
+  var typeTokens = {};
+  function typeInto(el, text, withCaret, tokenKey) {
     if (!el) return;
+    var key = tokenKey || el;
+    var token = (typeTokens[key] = (typeTokens[key] || 0) + 1);
     var i = 0;
-    var timer = setInterval(function () {
+    function step() {
+      if (typeTokens[key] !== token) return;
       i++;
       el.innerHTML = escapeHtml(text.slice(0, i)) + (withCaret ? '<span class="caret"></span>' : '');
-      if (i >= text.length) clearInterval(timer);
-    }, speed || 16);
+      if (i < text.length) setTimeout(step, 26 + Math.random() * 34);
+    }
+    setTimeout(step, 30);
   }
 
   function animatePromptAndHeading(promptSel, headingSel, promptText, headingText) {
     var promptLive = document.querySelector(promptSel);
     var headingLive = document.querySelector(headingSel);
-    if (promptLive) typeInto(promptLive, promptText, 14, true);
-    if (headingLive) typeInto(headingLive, headingText, 10, false);
+    if (promptLive) typeInto(promptLive, promptText, true, promptSel);
+    if (headingLive) typeInto(headingLive, headingText, false, headingSel);
   }
 
   /* -------------------- card rendering -------------------- */
@@ -636,7 +644,7 @@
     var countEl = document.getElementById('work-count');
     if (countEl) countEl.textContent = String(list.length).padStart(2, '0') + ' project' + (list.length === 1 ? '' : 's');
 
-    animatePromptAndHeading('#page-work .prompt-block .live', '#page-work .glow-heading',
+    animatePromptAndHeading('#page-work .prompt-block .live', '#page-work .title-block .live',
       '> ls work/', 'All work');
   }
 
@@ -648,6 +656,7 @@
 
     document.title = p.name + ' — A.Voss';
     document.getElementById('detail-prompt-ghost').textContent = '> cat ' + p.id.toLowerCase() + '/readme';
+    document.getElementById('detail-title-ghost').textContent = p.name;
     document.getElementById('detail-title').textContent = p.name;
 
     var badges = (p.tags || []).map(function (t) { return '<span class="term-tag">' + escapeHtml(t) + '</span>'; }).join('');
@@ -715,12 +724,12 @@
   }
 
   function renderAbout() {
-    animatePromptAndHeading('#page-about .prompt-block .live', '#page-about .glow-heading',
+    animatePromptAndHeading('#page-about .prompt-block .live', '#page-about .title-block .live',
       '> cat about.sh', 'Ten years turning ideas into working software.');
   }
 
   function renderContact() {
-    animatePromptAndHeading('#page-contact .prompt-block .live', '#page-contact .glow-heading',
+    animatePromptAndHeading('#page-contact .prompt-block .live', '#page-contact .title-block .live',
       '> ./contact.sh --init', "Let's build something.");
   }
 
@@ -788,7 +797,7 @@
   function router() {
     var hash = window.location.hash || '#/';
     var m;
-    if (hash === '#/' || hash === '') {
+    if (hash === '#/' || hash === '' || hash === '#/home') {
       state.page = 'home';
       showPage('home');
       renderHome();
@@ -830,10 +839,16 @@
     document.getElementById('intro-replay').addEventListener('click', replayIntro);
 
     document.querySelectorAll('.term-tab').forEach(function (tab) {
-      tab.addEventListener('click', function () { navigate('#/' + tab.getAttribute('data-page')); });
+      tab.addEventListener('click', function () {
+        var p = tab.getAttribute('data-page');
+        navigate(p === 'home' ? '#/' : '#/' + p);
+      });
     });
     document.querySelectorAll('[data-goto]').forEach(function (el) {
-      el.addEventListener('click', function () { navigate('#/' + el.getAttribute('data-goto')); });
+      el.addEventListener('click', function () {
+        var p = el.getAttribute('data-goto');
+        navigate(p === 'home' ? '#/' : '#/' + p);
+      });
     });
 
     document.getElementById('logo').addEventListener('click', function () { navigate('#/'); });
