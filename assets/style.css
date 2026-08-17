@@ -97,6 +97,21 @@ button, input, textarea {
 
 .page { animation: pageIn 0.4s ease both; }
 
+/* Permanent, subtle animated scanline overlay across the whole app —
+   mirrors the reference's always-on CRT texture (separate from the
+   boot-screen's bezel-only .crt-scanlines below). */
+.scan { position: relative; }
+.scan::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9000;
+  background: repeating-linear-gradient(to bottom, transparent 0, transparent 2px, rgba(0,0,0,0.35) 3px, transparent 4px);
+  mix-blend-mode: overlay;
+  animation: scan 0.6s linear infinite;
+}
+
 /* ---------- shell / layout ---------- */
 
 .wrap { max-width: 1000px; margin: 0 auto; padding: 0 40px; }

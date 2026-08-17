@@ -150,9 +150,22 @@
     applyAccent();
   }
 
-  /* -------------------- CRT boot intro -------------------- */
+  /* -------------------- CRT boot intro --------------------
+     Faithful port of the reference's boot sequence: log text is drawn to
+     an offscreen 2D canvas (lines + "project preview" cards, bottom-up,
+     auto-scrolling), then that canvas is uploaded as a WebGL texture and
+     warped through a radial fisheye lens shader onto the visible
+     <canvas id="boot-canvas">. Runs a real typed boot log, floods ~500
+     kernel-log lines, lists real projects from projects.json, "loads"
+     and "previews" each one with a simulated progress bar, then loops —
+     until the visitor clicks ./home.sh --enter (always available). */
 
-  function buildBootLog(projectIds) {
+  var boot = {
+    canvas: null, gl: null, tex: null, uK: null, uUFade: null, textCanvas: null,
+    entries: [], typing: '', token: 0, bootLines: [], projects: []
+  };
+
+  function buildBootLines() {
     var modules = ['nvme', 'usbcore', 'ext4', 'overlayfs', 'cgroup2', 'netfilter', 'tcp_bbr', 'af_packet', 'loop', 'dm_crypt',
       'zram', 'btrfs', 'squashfs', 'acpi_cpufreq', 'i2c_core', 'drm_kms', 'snd_hda', 'cpufreq_governor', 'vfat', 'tmpfs'];
     var services = ['network-manager', 'systemd-journald', 'dbus', 'ssh-agent', 'cron', 'avahi-daemon', 'polkit', 'udisks2',
@@ -161,8 +174,7 @@
       '/opt/toolchain', '/srv/assets', '/mnt/backup'];
     var lines = ['$ boot avoss_os --profile=portfolio', '> initializing session...'];
     var addr = 0x7f000000;
-    var count = 160;
-    for (var i = 0; i < count; i++) {
+    for (var i = 0; i < 480; i++) {
       var roll = i % 5;
       if (roll === 0) lines.push('[  ' + (i * 0.0137).toFixed(6) + '] Loading module ' + modules[i % modules.length] + '... ok');
       else if (roll === 1) lines.push('> starting ' + services[i % services.length] + '.service... ok');
@@ -172,18 +184,297 @@
     }
     lines.push('> checking kernel modules... ok', '> mounting /dev/portfolio...', '> verifying user credentials... ok',
       '> loading shell profile: avoss.zshrc', '> starting display server...', '> network: connected (eth0, 1000 Mb/s)',
-      '> syncing clock...', '> mounting home directory... ok', '', 'projects/');
-    projectIds.forEach(function (id, i) {
-      lines.push((i === projectIds.length - 1 ? '└── ' : '├── ') + id + '/');
-    });
-    lines.push('', '> ' + projectIds.length + ' projects loaded, 0 errors', '> ready.');
+      '> syncing clock... 03:14:07 UTC', '> mounting home directory... ok');
     return lines;
   }
 
-  function runIntro(projectIds, onDone) {
+  function buildProjectTree(projects) {
+    var lines = ['projects/'];
+    projects.forEach(function (p, i) {
+      var last = i === projects.length - 1;
+      lines.push((last ? '└── ' : '├── ') + p.id + '/  (' + tagLabelFor(p) + ')');
+    });
+    lines.push('', '> ' + projects.length + ' projects loaded, 0 errors');
+    return lines;
+  }
+
+  /* ---- offscreen text render + WebGL fisheye warp ---- */
+
+  function setupBootCanvas() {
+    var canvas = document.getElementById('boot-canvas');
+    if (!canvas) return;
+    if (boot.gl && boot.canvas === canvas) return;
+    boot.canvas = canvas;
+    var gl;
+    try { gl = canvas.getContext('webgl', { preserveDrawingBuffer: true }); } catch (e) { gl = null; }
+    if (!gl) return;
+    boot.gl = gl;
+    var vs = 'attribute vec2 p; varying vec2 vUv; void main(){ vUv = p*0.5+0.5; gl_Position = vec4(p,0.0,1.0); }';
+    var fs = 'precision mediump float; varying vec2 vUv; uniform sampler2D uTex; uniform float uK; uniform float uFadeStart;\n' +
+      'void main(){\n' +
+      '  vec2 uv = vUv*2.0-1.0;\n' +
+      '  float r = length(uv);\n' +
+      '  vec2 uv2 = uv * (1.0 + uK*r*r*0.01);\n' +
+      '  uv2 = uv2*0.5+0.5;\n' +
+      '  vec4 bg = vec4(0.02,0.028,0.02,1.0);\n' +
+      '  vec4 texColor = bg;\n' +
+      '  if (uv2.x>=0.0 && uv2.x<=1.0 && uv2.y>=0.0 && uv2.y<=1.0) { texColor = texture2D(uTex, vec2(uv2.x, 1.0-uv2.y)); }\n' +
+      '  float fadeTop = smoothstep(1.0, uFadeStart, vUv.y);\n' +
+      '  fadeTop = pow(fadeTop, 1.6);\n' +
+      '  gl_FragColor = mix(bg, texColor, fadeTop);\n' +
+      '}';
+    function compile(t, s) { var sh = gl.createShader(t); gl.shaderSource(sh, s); gl.compileShader(sh); return sh; }
+    var prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, vs));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(prog);
+    gl.useProgram(prog);
+    var buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    var loc = gl.getAttribLocation(prog, 'p');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    boot.uK = gl.getUniformLocation(prog, 'uK');
+    boot.uUFade = gl.getUniformLocation(prog, 'uFadeStart');
+    var tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    boot.tex = tex;
+    boot.textCanvas = document.createElement('canvas');
+    renderBootFrame();
+  }
+
+  function wrapText(ctx, text, maxW, size) {
+    ctx.font = size + "px 'JetBrains Mono', monospace";
+    var words = text.split(' '); var out = []; var cur = '';
+    for (var i = 0; i < words.length; i++) {
+      var test = cur ? cur + ' ' + words[i] : words[i];
+      if (ctx.measureText(test).width > maxW && cur) { out.push(cur); cur = words[i]; } else cur = test;
+    }
+    if (cur) out.push(cur);
+    return out;
+  }
+
+  function renderBootFrame() {
+    var canvas = boot.canvas, gl = boot.gl;
+    if (!canvas || !gl) return;
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    var rect = canvas.getBoundingClientRect();
+    var w = Math.max(1, Math.round(rect.width * dpr)), h = Math.max(1, Math.round(rect.height * dpr));
+    if (!w || !h) return;
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    var tc = boot.textCanvas;
+    tc.width = w; tc.height = h;
+    var tctx = tc.getContext('2d');
+    tctx.fillStyle = '#050705'; tctx.fillRect(0, 0, w, h);
+    var acc = ACCENTS[state.accent] || ACCENTS.green;
+    var fontSize = 12.5 * dpr;
+    var lineHeight = fontSize * 1.55;
+    var colW = Math.min(w - 40 * dpr, 880 * dpr);
+    var padX = (w - colW) / 2;
+    tctx.textBaseline = 'top';
+
+    var blocks = [];
+    boot.entries.forEach(function (entry) {
+      if (entry.isLine) {
+        blocks.push({ h: lineHeight, draw: function (y) { tctx.font = fontSize + "px 'JetBrains Mono', monospace"; tctx.fillStyle = acc; tctx.fillText(entry.text, padX, y); } });
+      } else if (entry.isPreview) {
+        var boxH = colW * 0.375;
+        var blurbLines = wrapText(tctx, entry.blurb, colW - 28 * dpr, 12.5 * dpr);
+        var cardH = 20 * dpr + 22 * dpr + 4 * dpr + 18 * dpr + 8 * dpr + blurbLines.length * 18 * dpr + 8 * dpr + 16 * dpr + 14 * dpr;
+        blocks.push({
+          h: boxH + 6 * dpr + cardH + 10 * dpr,
+          draw: function (y) {
+            tctx.strokeStyle = 'rgba(150,255,190,0.4)'; tctx.lineWidth = dpr;
+            tctx.strokeRect(padX, y, colW, boxH);
+            tctx.fillStyle = 'rgba(150,255,190,0.7)';
+            tctx.font = (12 * dpr) + "px 'JetBrains Mono', monospace";
+            tctx.textAlign = 'center';
+            tctx.fillText('[ project preview ]', padX + colW / 2, y + boxH / 2 - 8 * dpr);
+            tctx.font = (11 * dpr) + "px 'JetBrains Mono', monospace";
+            tctx.fillText('or browse files', padX + colW / 2, y + boxH / 2 + 12 * dpr);
+            tctx.textAlign = 'left';
+            var cy = y + boxH + 6 * dpr;
+            tctx.strokeStyle = 'rgba(150,255,190,0.5)';
+            tctx.strokeRect(padX, cy, colW, cardH);
+            cy += 14 * dpr;
+            tctx.fillStyle = acc; tctx.font = 'bold ' + (14 * dpr) + "px 'JetBrains Mono', monospace";
+            tctx.fillText(entry.title, padX + 14 * dpr, cy); cy += 22 * dpr;
+            tctx.fillStyle = 'rgba(150,255,190,0.75)'; tctx.font = (12 * dpr) + "px 'JetBrains Mono', monospace";
+            tctx.fillText(entry.tagline, padX + 14 * dpr, cy); cy += 22 * dpr;
+            tctx.fillStyle = acc; tctx.font = (12.5 * dpr) + "px 'JetBrains Mono', monospace";
+            blurbLines.forEach(function (l) { tctx.fillText(l, padX + 14 * dpr, cy); cy += 18 * dpr; });
+            cy += 8 * dpr;
+            tctx.fillStyle = 'rgba(150,255,190,0.6)'; tctx.font = (11.5 * dpr) + "px 'JetBrains Mono', monospace";
+            tctx.fillText(entry.stackLine, padX + 14 * dpr, cy);
+          }
+        });
+      }
+    });
+    if (boot.typing) blocks.push({ h: lineHeight, draw: function (y) { tctx.font = fontSize + "px 'JetBrains Mono', monospace"; tctx.fillStyle = acc; tctx.fillText(boot.typing + '_', padX, y); } });
+
+    var y = h - 40 * dpr;
+    for (var i = blocks.length - 1; i >= 0 && y > -200 * dpr; i--) {
+      y -= blocks[i].h;
+      if (y < h) blocks[i].draw(y);
+    }
+
+    gl.viewport(0, 0, w, h);
+    gl.bindTexture(gl.TEXTURE_2D, boot.tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tc);
+    gl.uniform1f(boot.uK, 32);
+    gl.uniform1f(boot.uUFade, 0.42);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  /* ---- boot sequence state machine (typed lines, flood log, project loop) ---- */
+
+  function bootAppendLine(text) {
+    boot.entries = boot.entries.concat([{ isLine: true, text: text }]).slice(-30);
+    renderBootFrame();
+  }
+
+  function bootUpdateLastLine(text) {
+    var entries = boot.entries.slice();
+    if (entries.length && entries[entries.length - 1].isLine) entries[entries.length - 1] = { isLine: true, text: text };
+    else entries.push({ isLine: true, text: text });
+    boot.entries = entries;
+    renderBootFrame();
+  }
+
+  function bootAppendPreview(p) {
+    boot.entries = boot.entries.concat([{
+      isPreview: true, title: p.name.toUpperCase(),
+      tagline: tagLabelFor(p) + ' · ' + codeFor(p) + ' · ' + yearFor(p),
+      blurb: p.description || '',
+      stackLine: 'stack: ' + (p.stack || p.tags || []).slice(0, 3).join(', ')
+    }]).slice(-12);
+    renderBootFrame();
+  }
+
+  function bootTypeLine(text, cb) {
+    var token = boot.token;
+    var i = 0;
+    boot.typing = '';
+    function step() {
+      if (boot.token !== token) return;
+      i++;
+      boot.typing = text.slice(0, i);
+      renderBootFrame();
+      if (i < text.length) { setTimeout(step, 14 + Math.random() * 18); return; }
+      bootAppendLine(text);
+      boot.typing = '';
+      setTimeout(function () { if (boot.token === token) cb(); }, 200);
+    }
+    setTimeout(step, 90);
+  }
+
+  function bootAssetProgress(label, cb) {
+    var token = boot.token;
+    var width = 22, steps = 28, i = 0;
+    bootAppendLine('');
+    function tick() {
+      if (boot.token !== token) return;
+      var pct = Math.min(100, Math.round((i / steps) * 100));
+      var filled = Math.round((pct / 100) * width);
+      var bar = new Array(filled + 1).join('=') + new Array(width - filled + 1).join(' ');
+      bootUpdateLastLine('> loading assets: ' + label + ' [' + bar + '] ' + String(pct).padStart(3, ' ') + '%');
+      if (i >= steps) { setTimeout(cb, 200); return; }
+      i++;
+      setTimeout(tick, 45 + Math.random() * 30);
+    }
+    tick();
+  }
+
+  function startBootSequence() {
+    var token = ++boot.token;
+    function alive() { return boot.token === token; }
+    boot.entries = []; boot.typing = '';
+    var projects = boot.projects;
+
+    var bootIdx = { i: 0 };
+    function floodBoot() {
+      if (!alive()) return;
+      if (bootIdx.i >= boot.bootLines.length) { setTimeout(function () { runTree(function () { runPreviewStep(0, 0); }); }, 400); return; }
+      var batch = 6;
+      for (var n = 0; n < batch && bootIdx.i < boot.bootLines.length; n++, bootIdx.i++) bootAppendLine(boot.bootLines[bootIdx.i]);
+      setTimeout(floodBoot, 12);
+    }
+
+    function runTree(next) {
+      if (!alive()) return;
+      bootTypeLine('$ list projects', function () {
+        var treeLines = buildProjectTree(projects);
+        var ti = 0;
+        function floodTree() {
+          if (!alive()) return;
+          if (ti >= treeLines.length) { setTimeout(next, 350); return; }
+          bootAppendLine(treeLines[ti]); ti++;
+          setTimeout(floodTree, 55);
+        }
+        floodTree();
+      });
+    }
+
+    function runBootLine() {
+      if (!alive()) return;
+      if (!boot.bootLines.length) { runTree(function () { runPreviewStep(0, 0); }); return; }
+      bootTypeLine(boot.bootLines[0], function () { bootIdx.i = 1; floodBoot(); });
+    }
+
+    function runPreviewStep(projIdx, mediaIdx) {
+      if (!alive()) return;
+      if (!projects.length) return;
+      var proj = projects[projIdx];
+      if (mediaIdx === 0) {
+        bootTypeLine('$ load ' + proj.id, function () { bootAssetProgress(proj.id, function () { runPreviewFrame(projIdx, mediaIdx); }); });
+        return;
+      }
+      runPreviewFrame(projIdx, mediaIdx);
+    }
+
+    function runPreviewFrame(projIdx, mediaIdx) {
+      if (!alive()) return;
+      var proj = projects[projIdx];
+      var mediaCount = mediaFor(proj).length || 1;
+      bootTypeLine('$ preview ' + proj.id + ' --frame ' + (mediaIdx + 1), function () {
+        bootAppendPreview(proj);
+        setTimeout(function () {
+          if (!alive()) return;
+          var nextMedia = mediaIdx + 1, nextProj = projIdx;
+          if (nextMedia >= mediaCount) {
+            nextMedia = 0; nextProj = projIdx + 1;
+            if (nextProj >= projects.length) { runClearAndLoop(); return; }
+            runTree(function () { runPreviewStep(nextProj, nextMedia); });
+            return;
+          }
+          runPreviewStep(nextProj, nextMedia);
+        }, 2100);
+      });
+    }
+
+    function runClearAndLoop() {
+      if (!alive()) return;
+      bootTypeLine('$ clear', function () {
+        setTimeout(function () {
+          if (!alive()) return;
+          boot.entries = [];
+          bootIdx.i = 0;
+          runBootLine();
+        }, 400);
+      });
+    }
+
+    setTimeout(runBootLine, 150);
+  }
+
+  function runIntro(onDone) {
     var overlay = document.getElementById('intro-overlay');
     var vignette = document.getElementById('intro-vignette');
-    var logEl = document.getElementById('intro-log');
     var enterBtn = document.getElementById('intro-enter');
 
     if (state.introSeen) {
@@ -195,20 +486,13 @@
 
     overlay.style.display = 'flex';
     vignette.style.display = 'block';
-
-    var lines = buildBootLog(projectIds);
-    var i = 0;
-    var buf = [];
-    var timer = setInterval(function () {
-      var step = 4;
-      for (var k = 0; k < step && i < lines.length; k++, i++) buf.push(lines[i]);
-      logEl.textContent = buf.join('\n');
-      logEl.scrollTop = logEl.scrollHeight;
-      if (i >= lines.length) clearInterval(timer);
-    }, 16);
+    boot.bootLines = buildBootLines();
+    boot.projects = sortProjects(state.projects);
+    setupBootCanvas();
+    startBootSequence();
 
     function finish() {
-      clearInterval(timer);
+      boot.token++; // cancel any pending boot timers
       overlay.style.display = 'none';
       vignette.style.display = 'none';
       sessionStorage.setItem('introSeen', '1');
@@ -222,11 +506,12 @@
   function replayIntro() {
     state.introSeen = false;
     sessionStorage.removeItem('introSeen');
-    document.getElementById('intro-log').textContent = '';
-    runIntro(state.projects.map(function (p) { return p.id; }), function () {
-      navigate('#/');
-    });
+    runIntro(function () { navigate('#/'); });
   }
+
+  window.addEventListener('resize', function () {
+    if (document.getElementById('intro-overlay').style.display === 'flex') renderBootFrame();
+  });
 
   /* -------------------- typing effect -------------------- */
 
@@ -609,6 +894,19 @@
     });
 
     window.addEventListener('hashchange', router);
+
+    // Cursor-follow zoom icon: the reference hides the real cursor over
+    // hoverable images (see .img-hover-wrap:hover in style.css) and moves
+    // the magnifier SVG to the pointer position instead of centering it.
+    document.addEventListener('mousemove', function (e) {
+      var wrap = e.target.closest ? e.target.closest('.img-hover-wrap') : null;
+      if (!wrap) return;
+      var icon = wrap.querySelector('.zoom-icon');
+      if (!icon) return;
+      var r = wrap.getBoundingClientRect();
+      icon.style.left = (e.clientX - r.left) + 'px';
+      icon.style.top = (e.clientY - r.top) + 'px';
+    });
   }
 
   /* -------------------- boot -------------------- */
@@ -620,8 +918,7 @@
 
     fetchManifest().then(function (manifest) {
       state.projects = manifest.projects || [];
-      var ids = sortProjects(state.projects).map(function (p) { return p.id; });
-      runIntro(ids, function () {
+      runIntro(function () {
         document.getElementById('app').style.display = 'block';
         router();
       });
