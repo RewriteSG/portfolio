@@ -54,7 +54,28 @@
     return './projects/' + project.id + '/' + src.replace(/^\.\//, '');
   }
 
-  function isVideoEmbed(src) { return /^https?:\/\//i.test(src); }
+  // A "direct" video is a file the browser can play natively via <video>
+  // (mp4/webm/ogg/mov) — whether that's a relative repo path or an
+  // externally-hosted file link. Anything else that's an http(s) URL
+  // (YouTube, Vimeo, itch.io, ...) is treated as an iframe embed.
+  function isDirectVideoFile(src) { return /\.(mp4|webm|ogv|ogg|mov)(\?.*)?$/i.test(src); }
+  function isIframeEmbed(src) { return /^https?:\/\//i.test(src) && !isDirectVideoFile(src); }
+  function isVideoEmbed(src) { return isIframeEmbed(src); } // back-compat alias
+
+  // Appends provider-specific autoplay/mute query params so an iframe embed
+  // actually autoplays — browsers require muted for unattended autoplay.
+  function withAutoplayParams(src) {
+    var sep = src.indexOf('?') !== -1 ? '&' : '?';
+    if (/(^https?:\/\/)(www\.)?(youtube\.com\/embed\/|youtu\.be\/)/i.test(src)) {
+      return src + sep + 'autoplay=1&mute=1&playsinline=1';
+    }
+    if (/player\.vimeo\.com/i.test(src)) {
+      return src + sep + 'autoplay=1&muted=1';
+    }
+    // Unknown provider (itch.io, a custom embed, etc.) — leave untouched;
+    // most non-video-platform embeds don't support/need these params.
+    return src;
+  }
 
   function thumbUrl(p) {
     return p.thumbnail ? mediaUrl(p, p.thumbnail) : null;
@@ -148,6 +169,133 @@
     state.accent = ACCENT_ORDER[(i + 1) % ACCENT_ORDER.length];
     localStorage.setItem('accent', state.accent);
     applyAccent();
+  }
+
+  /* -------------------- site info (info.js) --------------------
+     Populates every non-project text on the page from window.SITE_INFO
+     (assets/info.js). Runs once at boot, before the intro/router, so
+     ghost elements (which size the typed-heading boxes — see the
+     typing-effect comment near typeInto) already hold the final text
+     the moment typing starts. If info.js fails to load for any reason,
+     the hardcoded defaults already sitting in index.html are used as-is. */
+
+  function setText(id, text) {
+    var el = document.getElementById(id);
+    if (el && text != null) el.textContent = text;
+  }
+
+  function applySiteInfo() {
+    var info = window.SITE_INFO;
+    if (!info) return; // info.js missing/failed to load — keep HTML defaults
+
+    if (info.meta && info.meta.title) document.title = info.meta.title;
+    var metaDesc = document.getElementById('meta-description');
+    if (metaDesc && info.meta && info.meta.description) metaDesc.setAttribute('content', info.meta.description);
+
+    if (info.name) {
+      document.querySelectorAll('.logo').forEach(function (el) {
+        if (el.firstChild && el.firstChild.nodeType === Node.TEXT_NODE) el.firstChild.textContent = info.name.toUpperCase();
+      });
+    }
+
+    var nav = info.nav || {};
+    setText('nav-label-home', nav.home);
+    setText('nav-label-work', nav.work);
+    setText('nav-label-about', nav.about);
+    setText('nav-label-contact', nav.contact);
+    setText('intro-replay', nav.introReplay);
+    setText('intro-enter', nav.introEnter);
+    setText('nav-contact-cta', nav.contactCta);
+
+    var home = info.home || {};
+    setText('home-prompt-ghost', home.prompt);
+    setText('home-prompt-live', home.prompt); // overwritten char-by-char once typing starts
+    setText('home-title-ghost', home.title);
+    setText('home-title-live', home.title);
+    setText('home-lede', home.lede);
+    setText('home-cta-primary', home.ctaPrimary);
+    setText('home-cta-secondary', home.ctaSecondary);
+
+    var stats = info.stats || {};
+    setText('stat-label-years', stats.years);
+    setText('stat-label-projects', stats.projects);
+    setText('stat-label-disciplines', stats.disciplines);
+    setText('stat-label-wip', stats.wip);
+
+    var work = info.work || {};
+    setText('work-prompt-ghost', work.prompt);
+    setText('work-prompt-live', work.prompt);
+    setText('work-title-ghost', work.title);
+    setText('work-title-live', work.title);
+
+    var about = info.about || {};
+    setText('about-prompt-ghost', about.prompt);
+    setText('about-prompt-live', about.prompt);
+    setText('about-title-ghost', about.title);
+    setText('about-title-live', about.title);
+
+    var bioEl = document.getElementById('about-bio');
+    if (bioEl && about.bio) bioEl.innerHTML = about.bio.map(function (p) { return '<p>' + escapeHtml(p) + '</p>'; }).join('');
+
+    var skillsEl = document.getElementById('about-skills-table');
+    if (skillsEl && about.skills) {
+      var headers = about.skills.headers || [];
+      var rows = about.skills.rows || [];
+      var html = headers.map(function (h) { return '<div class="head">' + escapeHtml(h) + '</div>'; }).join('');
+      rows.forEach(function (row) {
+        html += row.map(function (cell) { return '<div class="cell">' + escapeHtml(cell || '') + '</div>'; }).join('');
+      });
+      skillsEl.innerHTML = html;
+    }
+
+    setText('about-education', about.education);
+    setText('about-timeline', about.timeline);
+
+    var contact = info.contact || {};
+    setText('contact-prompt-ghost', contact.prompt);
+    setText('contact-prompt-live', contact.prompt);
+    setText('contact-title-ghost', contact.title);
+    setText('contact-title-live', contact.title);
+    setText('contact-lede', contact.lede);
+
+    var directEl = document.getElementById('contact-direct-links');
+    if (directEl) {
+      var links = [];
+      if (contact.email) links.push({ label: 'mailto:' + contact.email, url: 'mailto:' + contact.email, external: false });
+      (info.socials || []).forEach(function (s) { links.push({ label: s.label, url: s.url, external: true }); });
+      directEl.innerHTML = links.map(function (l) {
+        return '<a href="' + escapeHtml(l.url) + '"' + (l.external ? ' target="_blank" rel="noopener"' : '') + '>$ open ' + escapeHtml(l.label) + '</a>';
+      }).join('');
+    }
+
+    var statusEl = document.getElementById('contact-status-box');
+    if (statusEl && (contact.status || contact.responseTime)) {
+      statusEl.innerHTML =
+        '$ echo $STATUS<br><span style="opacity:0.85;">&gt; ' + escapeHtml(contact.status || '') + '</span><br><br>' +
+        '$ echo $RESPONSE_TIME<br><span style="opacity:0.85;">&gt; ' + escapeHtml(contact.responseTime || '') + '</span>';
+    }
+
+    setText('site-footer-text', info.footer);
+
+    // Section labels ("bio/", "skills/", etc.) — data-driven loop over
+    // {SITE_INFO key -> element id} rather than one setText() call per
+    // label, so adding a new label later is a one-line addition to this
+    // map instead of a new hardcoded line.
+    var labels = info.labels || {};
+    var labelMap = {
+      selectedWork: 'label-selected-work',
+      bio: 'label-bio',
+      skills: 'label-skills',
+      education: 'label-education',
+      timeline: 'label-timeline',
+      stack: 'label-stack',
+      commitLog: 'label-commit-log',
+      links: 'label-links',
+      direct: 'label-direct'
+    };
+    Object.keys(labelMap).forEach(function (key) {
+      setText(labelMap[key], labels[key]);
+    });
   }
 
   /* -------------------- CRT boot intro --------------------
@@ -326,7 +474,7 @@
     gl.viewport(0, 0, w, h);
     gl.bindTexture(gl.TEXTURE_2D, boot.tex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tc);
-    gl.uniform1f(boot.uK, 4);
+    gl.uniform1f(boot.uK, 32);
     gl.uniform1f(boot.uUFade, 0.42);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
@@ -548,11 +696,31 @@
     return '';
   }
 
-  function cardHtml(p) {
+  // Picks the card's preview element: a muted/looping/autoplaying <video>
+  // if the project has a direct video file flagged (or as media[0]) for
+  // card use, otherwise the static thumbnail image. Iframe embeds
+  // (YouTube/Vimeo/itch.io) are deliberately excluded here — autoplaying
+  // several embedded players at once across a grid of cards is heavy and
+  // often blocked; those only autoplay on the single-item detail page.
+  function cardPreviewHtml(p) {
+    var media = mediaFor(p);
+    var flagged = media.find(function (m) { return m.type === 'video' && m.cardPreview && isDirectVideoFile(m.src); });
+    var candidate = flagged || ((media[0] && media[0].type === 'video' && isDirectVideoFile(media[0].src)) ? media[0] : null);
+    if (candidate) {
+      var poster = thumbUrl(p);
+      return '<video class="card-preview-video"' +
+        (poster ? ' poster="' + escapeHtml(poster) + '"' : '') +
+        ' autoplay muted loop playsinline preload="metadata">' +
+        '<source src="' + escapeHtml(mediaUrl(p, candidate.src)) + '"></video>';
+    }
     var thumb = thumbUrl(p);
-    var thumbHtml = thumb
+    return thumb
       ? '<img src="' + escapeHtml(thumb) + '" alt="' + escapeHtml(p.name) + ' thumbnail" loading="lazy">'
       : '<div class="card-thumb-empty">no preview</div>';
+  }
+
+  function cardHtml(p) {
+    var thumbHtml = cardPreviewHtml(p);
     return (
       '<div class="term-card" data-nav="project" data-id="' + escapeHtml(p.id) + '">' +
         statusBadge(p.status) +
@@ -615,8 +783,9 @@
       ? featured.map(cardHtml).join('')
       : '<div class="state-box">No projects yet. Add one under <code>projects/</code> and push to main.</div>';
 
+    var homeInfo = (window.SITE_INFO && window.SITE_INFO.home) || {};
     animatePromptAndHeading('#home-prompt-live', '#home-title-live',
-      '> whoami', 'Programmer, building across games, software, apps & the web.');
+      homeInfo.prompt || '> whoami', homeInfo.title || 'Programmer, building across games, software, apps & the web.');
   }
 
   var allTagsCache = [];
@@ -644,8 +813,9 @@
     var countEl = document.getElementById('work-count');
     if (countEl) countEl.textContent = String(list.length).padStart(2, '0') + ' project' + (list.length === 1 ? '' : 's');
 
+    var workInfo = (window.SITE_INFO && window.SITE_INFO.work) || {};
     animatePromptAndHeading('#page-work .prompt-block .live', '#page-work .title-block .live',
-      '> ls work/', 'All work');
+      workInfo.prompt || '> ls work/', workInfo.title || 'All work');
   }
 
   function renderDetail(id) {
@@ -654,7 +824,7 @@
     state.activeId = id;
     state.mediaIndex = 0;
 
-    document.title = p.name + ' — A.Voss';
+    document.title = p.name + ' — ' + ((window.SITE_INFO && window.SITE_INFO.name) || 'A.Voss');
     document.getElementById('detail-prompt-ghost').textContent = '> cat ' + p.id.toLowerCase() + '/readme';
     document.getElementById('detail-title-ghost').textContent = p.name;
     document.getElementById('detail-title').textContent = p.name;
@@ -698,10 +868,12 @@
     }
     var item = media[state.mediaIndex] || media[0];
     if (item.type === 'video') {
-      if (isVideoEmbed(item.src)) {
-        slot.innerHTML = '<iframe src="' + escapeHtml(item.src) + '" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="width:100%;height:100%;border:none;"></iframe>';
+      if (isIframeEmbed(item.src)) {
+        // The detail page only ever shows one video at a time, so
+        // autoplaying here (unlike the card grid) is cheap and reliable.
+        slot.innerHTML = '<iframe src="' + escapeHtml(withAutoplayParams(item.src)) + '" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="width:100%;height:100%;border:none;"></iframe>';
       } else {
-        slot.innerHTML = '<video src="' + escapeHtml(mediaUrl(p, item.src)) + '" controls style="width:100%;height:100%;"></video>';
+        slot.innerHTML = '<video src="' + escapeHtml(mediaUrl(p, item.src)) + '" controls autoplay muted loop playsinline style="width:100%;height:100%;"></video>';
       }
     } else {
       slot.innerHTML = '<img src="' + escapeHtml(mediaUrl(p, item.src)) + '" alt="' + escapeHtml(item.caption || p.name) + '" style="width:100%;height:100%;object-fit:cover;">';
@@ -724,13 +896,15 @@
   }
 
   function renderAbout() {
+    var aboutInfo = (window.SITE_INFO && window.SITE_INFO.about) || {};
     animatePromptAndHeading('#page-about .prompt-block .live', '#page-about .title-block .live',
-      '> cat about.sh', 'Ten years turning ideas into working software.');
+      aboutInfo.prompt || '> cat about.sh', aboutInfo.title || 'Ten years turning ideas into working software.');
   }
 
   function renderContact() {
+    var contactInfo = (window.SITE_INFO && window.SITE_INFO.contact) || {};
     animatePromptAndHeading('#page-contact .prompt-block .live', '#page-contact .title-block .live',
-      '> ./contact.sh --init', "Let's build something.");
+      contactInfo.prompt || '> ./contact.sh --init', contactInfo.title || "Let's build something.");
   }
 
   /* -------------------- lightbox -------------------- */
@@ -739,7 +913,7 @@
     var p = state.projects.find(function (x) { return x.id === id; });
     if (!p) return;
     var media = mediaFor(p).filter(function (m) { return m.type !== 'video'; });
-    if (!media.length) return;
+    if (!media.length) { navigate('#/project/' + id); return; } // video-only preview: no image to zoom, open the project instead
     openLightbox(p, media, 0);
   }
 
@@ -797,33 +971,34 @@
   function router() {
     var hash = window.location.hash || '#/';
     var m;
+    var name = (window.SITE_INFO && window.SITE_INFO.name) || 'A.Voss';
     if (hash === '#/' || hash === '' || hash === '#/home') {
       state.page = 'home';
       showPage('home');
       renderHome();
-      document.title = 'A.Voss — Portfolio';
+      document.title = (window.SITE_INFO && window.SITE_INFO.meta && window.SITE_INFO.meta.title) || (name + ' — Portfolio');
     } else if (hash === '#/work') {
       state.page = 'work';
       showPage('work');
       renderWork();
-      document.title = 'Work — A.Voss';
+      document.title = 'Work — ' + name;
     } else if (hash === '#/about') {
       state.page = 'about';
       showPage('about');
       renderAbout();
-      document.title = 'About — A.Voss';
+      document.title = 'About — ' + name;
     } else if (hash === '#/contact') {
       state.page = 'contact';
       showPage('contact');
       renderContact();
-      document.title = 'Contact — A.Voss';
+      document.title = 'Contact — ' + name;
     } else if ((m = hash.match(/^#\/project\/(.+)$/))) {
       state.page = 'detail';
       showPage('detail');
       renderDetail(decodeURIComponent(m[1]));
     } else {
       showPage('404');
-      document.title = 'Not found — A.Voss';
+      document.title = 'Not found — ' + name;
     }
   }
 
@@ -903,7 +1078,8 @@
       }
       var subject = encodeURIComponent('Portfolio contact from ' + name);
       var body = encodeURIComponent(message + '\n\n— ' + name + ' (' + email + ')');
-      window.location.href = 'mailto:hi@example.dev?subject=' + subject + '&body=' + body;
+      var toAddress = (window.SITE_INFO && window.SITE_INFO.contact && window.SITE_INFO.contact.email) || 'hi@example.dev';
+      window.location.href = 'mailto:' + toAddress + '?subject=' + subject + '&body=' + body;
       btn.textContent = 'sent ✓';
       setTimeout(function () { btn.textContent = './send.sh'; }, 3000);
     });
@@ -928,6 +1104,7 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     applyAccent();
+    applySiteInfo();
     setupShader();
     wireStaticUI();
 

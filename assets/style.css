@@ -289,7 +289,7 @@ button, input, textarea {
 @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
 
 .img-hover-wrap { position: relative; border: 1px solid var(--border); aspect-ratio: 16/10; margin: -4px -4px 14px; overflow: hidden; background: #08090a; }
-.img-hover-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.img-hover-wrap img, .img-hover-wrap video.card-preview-video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .img-hover-wrap:hover, .img-hover-wrap:hover * { cursor: none !important; }
 .img-hover-wrap .zoom-icon {
   position: absolute; left: 50%; top: 50%; width: 34px; height: 34px;

@@ -25,6 +25,28 @@ whenever `projects/**` changes on `main`.
 `projects.json` is generated — don't hand-edit it. Edits will be
 overwritten the next time the Action runs.
 
+## Customizing your text — `assets/info.js`
+
+Everything on the site that isn't project data lives in one file:
+`assets/info.js`. It exports a single `window.SITE_INFO` object that
+`app.js` reads at boot to fill in the page. Edit the values in that file —
+your name/logo, the nav tab labels, the home/work/about/contact prompts,
+headings and lede paragraphs, the about-page bio paragraphs and skills
+table, the education/timeline ASCII blocks, your contact email, socials
+list, availability status, and the footer line. The file is heavily
+commented inline with notes on formatting (e.g. the skills table needs
+exactly 3 columns per row).
+
+No HTML or JS editing is required — just change the string/array values
+inside `SITE_INFO` and reload. This also drives the browser tab title, the
+`<meta name="description">` tag, and the contact form's `mailto:` target.
+
+The small terminal-style section labels scattered around the site (`bio/`,
+`skills/`, `education/`, `timeline/`, `stack/`, `commit_log/`, `links/`,
+`direct/`, `selected_work/`) are also editable — they live under
+`SITE_INFO.labels` in `info.js`. Keep or drop the trailing `/` as you like;
+it's just part of the filesystem-style look, not required.
+
 ## Design
 
 The site matches the original `bundled-backup.html` reference design: a
@@ -93,14 +115,26 @@ Project cards and the detail page support a hover-to-zoom image lightbox.
 | Field | Type | Description |
 |-------|------|-------------|
 | `type` | `"image"` or `"video"` | Media type |
-| `src` | string | Images: path relative to the project folder. Videos: an **external embed URL** (YouTube/itch.io/Vimeo). |
+| `src` | string | Images: path relative to the project folder. Videos: either a direct video file URL (`.mp4`/`.webm`/`.ogg`/`.mov`, hosted externally) or an **embed URL** (YouTube/Vimeo/itch.io). |
 | `caption` | string | Optional caption |
+| `cardPreview` | boolean | Video entries only. Marks this clip as the one to autoplay on the project's grid card (home/work) instead of the static `thumbnail` image. See below. |
+
+**Video playback.** A direct video file (`src` ending in `.mp4`/`.webm`/etc.) renders as an HTML5 `<video>` and always autoplays muted/looped on the project's detail page. A YouTube or Vimeo embed URL renders as an `<iframe>` and also autoplays muted on the detail page (autoplay params are appended automatically — just use the plain embed URL). Muted autoplay is a browser requirement, not a choice; visitors can unmute via the native video controls.
+
+**Card grid autoplay.** Only a *direct video file* can autoplay as a card preview (home/work grids) — either the first `media` entry if it's a direct video, or whichever entry has `"cardPreview": true`. YouTube/Vimeo embeds are intentionally excluded from card previews: autoplaying several embedded players at once across a grid is heavy and often silently blocked by the browser, so those still show the static `thumbnail` image on cards and only autoplay once you're on the single-item detail page.
+
+```json
+"media": [
+  { "type": "video", "src": "https://cdn.example.com/driftwake/clip.mp4", "caption": "Storm gameplay", "cardPreview": true },
+  { "type": "video", "src": "https://www.youtube.com/embed/xxxxxxxx", "caption": "Full trailer" }
+]
+```
 
 **Don't commit `.mp4` files.** Git keeps every version in history forever
 and bloats repo size over time, with no streaming/transcoding benefit on
-GitHub Pages. Host trailers externally (YouTube unlisted, itch.io, Vimeo)
-and reference the embed URL in `src`. Images stay in-repo since they're
-small and load directly.
+GitHub Pages. Host trailers externally (YouTube unlisted, itch.io, Vimeo,
+or a CDN for a direct file) and reference the URL in `src`. Images stay
+in-repo since they're small and load directly.
 
 ## Local preview
 
@@ -127,6 +161,7 @@ portfolio/
 ├── projects.json                # Auto-generated manifest — do not edit by hand
 ├── assets/
 │   ├── style.css                # CRT terminal theme, responsive layout
+│   ├── info.js                  # All your editable site text — name, nav, copy, contact, socials
 │   └── app.js                   # Routing/render/filter/lightbox/intro/shader logic
 ├── projects/
 │   └── Driftwake/

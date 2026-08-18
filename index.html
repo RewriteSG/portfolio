@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>A.Voss — Portfolio</title>
-<meta name="description" content="Programmer building across games, software and apps.">
+<meta name="description" id="meta-description" content="Programmer building across games, software and apps.">
 <link rel="stylesheet" href="./assets/style.css">
 </head>
 <body class="scan">
@@ -32,10 +32,10 @@
   <div id="app" style="display:none;">
 
     <nav class="term-tabs" id="term-tabs">
-      <span class="term-tab" data-page="home"><i class="dot"></i>home.sh</span>
-      <span class="term-tab" data-page="work"><i class="dot"></i>work.sh</span>
-      <span class="term-tab" data-page="about"><i class="dot"></i>about.sh</span>
-      <span class="term-tab" data-page="contact"><i class="dot"></i>contact.sh</span>
+      <span class="term-tab" data-page="home"><i class="dot"></i><span id="nav-label-home">home.sh</span></span>
+      <span class="term-tab" data-page="work"><i class="dot"></i><span id="nav-label-work">work.sh</span></span>
+      <span class="term-tab" data-page="about"><i class="dot"></i><span id="nav-label-about">about.sh</span></span>
+      <span class="term-tab" data-page="contact"><i class="dot"></i><span id="nav-label-contact">contact.sh</span></span>
     </nav>
 
     <div class="shell">
@@ -43,7 +43,7 @@
         <span class="logo glow" id="logo">A.VOSS<span class="caret"></span></span>
         <div class="masthead-actions">
           <button type="button" class="term-btn small" id="intro-replay">./intro.sh</button>
-          <button type="button" class="term-btn solid" data-goto="contact">get_in_touch()</button>
+          <button type="button" class="term-btn solid" id="nav-contact-cta" data-goto="contact">get_in_touch()</button>
         </div>
       </div>
 
@@ -51,29 +51,29 @@
       <div class="wrap page" id="page-home" style="display:none;">
         <section style="padding:80px 0 24px;">
           <div class="prompt-block">
-            <span class="ghost">&gt; whoami</span>
+            <span class="ghost" id="home-prompt-ghost">&gt; whoami</span>
             <span class="live" id="home-prompt-live">&gt; whoami<span class="caret"></span></span>
           </div>
           <div class="title-block">
-            <h1 class="ghost glow-heading">Programmer, building across games, software, apps &amp; the web.</h1>
+            <h1 class="ghost glow-heading" id="home-title-ghost">Programmer, building across games, software, apps &amp; the web.</h1>
             <h1 class="live glow-heading" id="home-title-live">Programmer, building across games, software, apps &amp; the web.</h1>
           </div>
-          <p class="lede">A working record of shipped projects — from indie game prototypes to production software, native apps and the odd stubborn website.</p>
+          <p class="lede" id="home-lede">A working record of shipped projects — from indie game prototypes to production software, native apps and the odd stubborn website.</p>
           <div style="display:flex;gap:16px;margin-top:36px;">
-            <button type="button" class="term-btn solid" data-goto="work">view_work --all</button>
-            <button type="button" class="term-btn" data-goto="about">about.sh</button>
+            <button type="button" class="term-btn solid" id="home-cta-primary" data-goto="work">view_work --all</button>
+            <button type="button" class="term-btn" id="home-cta-secondary" data-goto="about">about.sh</button>
           </div>
         </section>
 
         <section class="stats">
-          <div><div class="stat-num" id="stat-years">—</div><div class="stat-label">years_shipping</div></div>
-          <div><div class="stat-num" id="stat-projects">—</div><div class="stat-label">projects_shipped</div></div>
-          <div><div class="stat-num" id="stat-disciplines">—</div><div class="stat-label">disciplines</div></div>
-          <div><div class="stat-num" id="stat-wip">—</div><div class="stat-label">unfinished_builds</div></div>
+          <div><div class="stat-num" id="stat-years">—</div><div class="stat-label" id="stat-label-years">years_shipping</div></div>
+          <div><div class="stat-num" id="stat-projects">—</div><div class="stat-label" id="stat-label-projects">projects_shipped</div></div>
+          <div><div class="stat-num" id="stat-disciplines">—</div><div class="stat-label" id="stat-label-disciplines">disciplines</div></div>
+          <div><div class="stat-num" id="stat-wip">—</div><div class="stat-label" id="stat-label-wip">unfinished_builds</div></div>
         </section>
 
         <section style="padding:48px 0 72px;">
-          <span class="section-label">selected_work/</span>
+          <span class="section-label" id="label-selected-work">selected_work/</span>
           <div class="grid" id="home-grid"><div class="state-box">Loading projects…</div></div>
         </section>
       </div>
@@ -82,12 +82,12 @@
       <div class="wrap page" id="page-work" style="display:none; padding-bottom:80px;">
         <section style="padding:56px 0 8px;">
           <div class="prompt-block">
-            <span class="ghost">&gt; ls work/</span>
-            <span class="live">&gt; ls work/<span class="caret"></span></span>
+            <span class="ghost" id="work-prompt-ghost">&gt; ls work/</span>
+            <span class="live" id="work-prompt-live">&gt; ls work/<span class="caret"></span></span>
           </div>
           <div class="title-block">
-            <h1 class="ghost glow-heading small">All work</h1>
-            <h1 class="live glow-heading small">All work</h1>
+            <h1 class="ghost glow-heading small" id="work-title-ghost">All work</h1>
+            <h1 class="live glow-heading small" id="work-title-live">All work</h1>
           </div>
           <p style="font-size:14px;color:var(--text);opacity:0.7;margin-top:14px;" id="work-count"></p>
           <div class="filters" id="work-filters"></div>
@@ -101,56 +101,34 @@
       <div class="wrap page" id="page-about" style="display:none; padding-bottom:80px;">
         <section style="padding:56px 0 0;">
           <div class="prompt-block">
-            <span class="ghost">&gt; cat about.sh</span>
-            <span class="live">&gt; cat about.sh<span class="caret"></span></span>
+            <span class="ghost" id="about-prompt-ghost">&gt; cat about.sh</span>
+            <span class="live" id="about-prompt-live">&gt; cat about.sh<span class="caret"></span></span>
           </div>
           <div class="title-block">
-            <h1 class="ghost glow-heading about">Ten years turning ideas into working software.</h1>
-            <h1 class="live glow-heading about">Ten years turning ideas into working software.</h1>
+            <h1 class="ghost glow-heading about" id="about-title-ghost">Ten years turning ideas into working software.</h1>
+            <h1 class="live glow-heading about" id="about-title-live">Ten years turning ideas into working software.</h1>
           </div>
         </section>
 
         <section class="about-grid">
           <div>
-            <span class="section-label">bio/</span>
-            <p>I've spent the last eight years moving between disciplines that don't usually share a desk — game engines, backend services, native apps, and the occasional client website. I like the parts of programming that feel like carpentry: cutting a problem down until only the necessary joints are left. Currently based remote, shipping solo and in small teams.</p>
-            <p>Outside of client work I keep a running log of side projects — most don't ship, a few do. Driftwake, on the work tab, is the one I'm proudest of.</p>
-            <p>I work best on small teams with short feedback loops — a spec on a napkin beats a spec in a doc most days. If a project needs a second set of hands, I've got a short list of collaborators for design, audio and QA.</p>
+            <span class="section-label" id="label-bio">bio/</span>
+            <div id="about-bio"></div>
           </div>
           <div>
-            <span class="section-label">skills/</span>
-            <div class="skills-table">
-              <div class="head">LANGUAGES</div><div class="head">FRAMEWORKS</div><div class="head">INFRA</div>
-              <div class="cell">C++ / Rust</div><div class="cell">Godot / Unity</div><div class="cell">Docker</div>
-              <div class="cell">TypeScript</div><div class="cell">React / Next.js</div><div class="cell">GitHub Actions</div>
-              <div class="cell">Swift</div><div class="cell">SwiftUI</div><div class="cell">CloudKit</div>
-              <div class="cell">Python</div><div class="cell">SQLite / Postgres</div><div class="cell">Vercel</div>
-            </div>
+            <span class="section-label" id="label-skills">skills/</span>
+            <div class="skills-table" id="about-skills-table"></div>
           </div>
         </section>
 
         <section class="subsection">
-          <span class="section-label">education/</span>
-          <pre class="ascii-box">  2014 ─┬─ High School Diploma
-        │   Lincoln Academy
-        │
-  2018 ─┼─ B.S. Computer Science
-        │   State University
-        │
-  2020 ─┴─ M.S. Computer Graphics, Real-Time Rendering
-            State University</pre>
+          <span class="section-label" id="label-education">education/</span>
+          <pre class="ascii-box" id="about-education"></pre>
         </section>
 
         <section class="subsection" style="padding-bottom:56px;">
-          <span class="section-label">timeline/</span>
-          <pre class="ascii-box">  2023 ─┬─ now
-        │   Independent — contract software &amp; game dev
-        │
-  2020 ─┼─ 2023
-        │   Senior engineer — backend systems, mid-size startup
-        │
-  2018 ─┴─ 2020
-            App developer — iOS team, agency work</pre>
+          <span class="section-label" id="label-timeline">timeline/</span>
+          <pre class="ascii-box" id="about-timeline"></pre>
         </section>
       </div>
 
@@ -191,18 +169,18 @@
 
         <section class="section-split">
           <div>
-            <span class="section-label">stack/</span>
+            <span class="section-label" id="label-stack">stack/</span>
             <div class="tag-row" id="detail-stack"></div>
           </div>
           <div>
-            <span class="section-label">commit_log/</span>
+            <span class="section-label" id="label-commit-log">commit_log/</span>
             <div class="commit-log" id="detail-commits"></div>
           </div>
         </section>
 
         <section class="section-split" style="border-top:none;padding-top:0;">
           <div>
-            <span class="section-label">links/</span>
+            <span class="section-label" id="label-links">links/</span>
             <div class="links-list" id="detail-links"></div>
           </div>
         </section>
@@ -212,14 +190,14 @@
       <div class="wrap page" id="page-contact" style="display:none; padding-bottom:80px;">
         <section style="padding:56px 0 0;">
           <div class="prompt-block">
-            <span class="ghost">&gt; ./contact.sh --init</span>
-            <span class="live">&gt; ./contact.sh --init<span class="caret"></span></span>
+            <span class="ghost" id="contact-prompt-ghost">&gt; ./contact.sh --init</span>
+            <span class="live" id="contact-prompt-live">&gt; ./contact.sh --init<span class="caret"></span></span>
           </div>
           <div class="title-block">
-            <h1 class="ghost glow-heading contact">Let's build something.</h1>
-            <h1 class="live glow-heading contact">Let's build something.</h1>
+            <h1 class="ghost glow-heading contact" id="contact-title-ghost">Let's build something.</h1>
+            <h1 class="live glow-heading contact" id="contact-title-live">Let's build something.</h1>
           </div>
-          <p class="lede" style="max-width:52ch;">Open to freelance work and interesting collaborations. Fill in the fields below or reach out directly.</p>
+          <p class="lede" style="max-width:52ch;" id="contact-lede">Open to freelance work and interesting collaborations. Fill in the fields below or reach out directly.</p>
         </section>
 
         <section class="contact-grid">
@@ -232,15 +210,9 @@
             </form>
           </div>
           <div>
-            <span class="section-label">direct/</span>
-            <div class="links-list">
-              <a href="mailto:hi@example.dev">$ open mailto:hi@example.dev</a>
-              <a href="https://github.com/" target="_blank" rel="noopener">$ open github.com/you</a>
-            </div>
-            <div class="status-box">
-              $ echo $STATUS<br><span style="opacity:0.85;">&gt; available for freelance, Q4 2026</span><br><br>
-              $ echo $RESPONSE_TIME<br><span style="opacity:0.85;">&gt; usually within 24h, GMT+8</span>
-            </div>
+            <span class="section-label" id="label-direct">direct/</span>
+            <div class="links-list" id="contact-direct-links"></div>
+            <div class="status-box" id="contact-status-box"></div>
           </div>
         </section>
       </div>
@@ -255,7 +227,7 @@
 
     </div>
 
-    <footer class="site-footer">
+    <footer class="site-footer" id="site-footer-text">
       built with vanilla html/css/js · projects.json manifest generated by github actions
     </footer>
   </div>
@@ -273,6 +245,7 @@
     </div>
   </div>
 
+  <script src="./assets/info.js"></script>
   <script src="./assets/app.js"></script>
 </body>
 </html>
