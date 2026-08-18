@@ -32,7 +32,7 @@ window.SITE_INFO = {
 
   // ---------------- home page ----------------
   home: {
-    prompt: '> run Hazwan.js --whoami',
+    prompt: '> run Hazwan.sh --whoami',
     title: 'Programmer, building across games, software, apps & the web.',
     lede: 'A working record of shipped projects — from indie game prototypes to production software, native apps and the odd stubborn website.',
     ctaPrimary: 'view_work --all',
