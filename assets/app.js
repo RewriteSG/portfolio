@@ -474,7 +474,7 @@
     gl.viewport(0, 0, w, h);
     gl.bindTexture(gl.TEXTURE_2D, boot.tex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tc);
-    gl.uniform1f(boot.uK, 32);
+    gl.uniform1f(boot.uK, 4);
     gl.uniform1f(boot.uUFade, 0.42);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
