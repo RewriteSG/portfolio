@@ -1,0 +1,13 @@
+# Node.js dependencies
+node_modules/
+
+# npm debug logs
+npm-debug.log*
+
+# Package manager logs
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Optional npm cache and local package data
+.npm/

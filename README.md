@@ -1,184 +1,322 @@
-# Portfolio
+# OpenCode Multi-Agent Workflow
 
-A GitHub Pages portfolio that discovers projects from the `projects/` folder
-and renders them client-side as a single-page app. No frameworks, no build
-step — the only "build" is a GitHub Action that regenerates `projects.json`
-whenever `projects/**` changes on `main`.
+A practical multi-agent workflow for OpenCode that runs locally and coordinates a small AI dev team through shared context, scoped permissions, and specialized roles.
 
-## How it works
+This setup includes:
+- A **planner** that asks clarifying questions first
+- A **debater** that checks whether there is a better plan
+- A **designer** that prepares layout and interaction guidance for user-facing interface changes
+- An **implementor** that makes the code changes
+- A **reviewer** that checks correctness and maintainability
+- A **tester** that runs focused tests
+- A **linter** that runs a project lint/check script
+- A **commit-message** agent that prints a final commit message
 
-- Each project lives in its own folder under `projects/<Name>/`, with an
-  `index.json` describing it and any local image files.
-- On every push to `main` that touches `projects/**`, the workflow in
-  `.github/workflows/update-manifest.yml` walks all `projects/*/index.json`
-  files, merges them into a single `projects.json` at the repo root (adding
-  the folder name as `id`), and commits it back.
-- `index.html` fetches `./projects.json` once and renders everything —
-  home, work, about, contact, and each project's detail view — as a
-  single-page app with hash routing (`#/`, `#/work`, `#/about`,
-  `#/contact`, `#/project/<id>`). No GitHub API calls, no per-project
-  requests, no rate-limit exposure no matter how much traffic the site
-  gets.
-- `project.html?id=<name>` still works as a legacy link — it redirects to
-  `index.html#/project/<name>`.
+The workflow uses:
+- `AGENTS.md` for shared rules across the project
+- `WORKFLOW_STATE.md` for persistent handoffs between agents
+- Per-agent permissions for safer edits and command execution
 
-`projects.json` is generated — don't hand-edit it. Edits will be
-overwritten the next time the Action runs.
+This repository stores its specialist role prompts in `.codex/agents/` and shared workflow rules in `AGENTS.md`.
 
-## Customizing your text — `assets/info.js`
+---
 
-Everything on the site that isn't project data lives in one file:
-`assets/info.js`. It exports a single `window.SITE_INFO` object that
-`app.js` reads at boot to fill in the page. Edit the values in that file —
-your name/logo, the nav tab labels, the home/work/about/contact prompts,
-headings and lede paragraphs, the about-page bio paragraphs and skills
-table, the education/timeline ASCII blocks, your contact email, socials
-list, availability status, and the footer line. The file is heavily
-commented inline with notes on formatting (e.g. the skills table needs
-exactly 3 columns per row).
+## Why this exists
 
-No HTML or JS editing is required — just change the string/array values
-inside `SITE_INFO` and reload. This also drives the browser tab title, the
-`<meta name="description">` tag, and the contact form's `mailto:` target.
+A single coding agent can do many things, but multi-step work often becomes messy when planning, implementation, review, testing, and documentation are mixed together.
 
-The small terminal-style section labels scattered around the site (`bio/`,
-`skills/`, `education/`, `timeline/`, `stack/`, `commit_log/`, `links/`,
-`direct/`, `selected_work/`) are also editable — they live under
-`SITE_INFO.labels` in `info.js`. Keep or drop the trailing `/` as you like;
-it's just part of the filesystem-style look, not required.
+This repo separates those concerns into focused agents with narrow responsibilities and a shared handoff file. The result is a workflow that is easier to inspect, easier to reuse, and easier to control.
 
-## Design
+---
 
-The site matches the original `bundled-backup.html` reference design: a
-CRT/terminal aesthetic on a near-black background with a glowing accent
-color (green by default, toggleable to amber or cyan via the button in the
-top-right corner). First visit shows an animated boot-log intro before
-landing on the home page; typed prompts and headings appear throughout.
-Project cards and the detail page support a hover-to-zoom image lightbox.
+## Workflow
 
-## Adding a new project
+The high-level flow looks like this:
 
-1. Create a folder: `projects/YourProjectName/`
-2. Add `index.json` inside it, following the schema below.
-3. Add any image files in the same folder (thumbnail + screenshots).
-   Keep videos external — see the note below.
-4. Push to `main`. The Action rebuilds `projects.json` automatically and
-   the live site picks it up on next load.
-
-## Schema — `projects/<Name>/index.json`
-
-```json
-{
-  "name": "Driftwake",
-  "description": "An atmospheric drift racing game with a synthwave aesthetic.",
-  "thumbnail": "./thumbnail.png",
-  "tags": ["game", "unity", "3d", "racing"],
-  "date": "2024-01-15",
-  "status": "completed",
-  "order": 10,
-  "subhead": "A one-line hook shown large on the detail page",
-  "long": "A longer paragraph shown next to the media gallery on the detail page.",
-  "stack": ["Unity", "C#", "FMOD"],
-  "code": "C#",
-  "commits": ["shipped v1.0", "fixed the storm shader"],
-  "media": [
-    { "type": "image", "src": "./screenshot1.png", "caption": "Track view" },
-    { "type": "image", "src": "./screenshot2.png", "caption": "Garage menu" },
-    { "type": "video", "src": "https://www.youtube.com/embed/xxxxxxxx", "caption": "Launch trailer" }
-  ],
-  "links": {
-    "demo": "https://play.example.com/driftwake",
-    "github": "https://github.com/you/driftwake"
-  }
-}
+```text
+User
+  ↓
+Planner
+  ↓
+Debater
+Designer (for user-facing interface changes)
+  ↓
+Implementor
+  ↓
+Reviewer
+  ↓
+Tester
+  ↓
+Linter
+  ↓
+Commit Message
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | yes | Display name |
-| `description` | string | yes | Short description — used as the card blurb, and as a fallback for `subhead`/`long` |
-| `thumbnail` | string | yes | Path to thumbnail image (relative to project folder) |
-| `tags` | string[] | no | Categorization tags (also used for grid filtering); the first tag is shown as the card's pill label |
-| `date` | string | no | Release / completion date (ISO 8601) |
-| `status` | `"completed"` \| `"in-progress"` \| `"prototype"` | no | Badges WIP projects on the grid and detail page |
-| `order` | number | no | Manual sort/pin override (higher = earlier); falls back to `date` if omitted |
-| `subhead` | string | no | Large hook shown at the top of the detail page's description column; falls back to `name` |
-| `long` | string | no | Longer body text on the detail page; falls back to `description` |
-| `stack` | string[] | no | Tech-stack pills on the detail page; falls back to `tags` |
-| `code` | string | no | Short language/tech label shown on the card (e.g. `"C++"`); falls back to the second tag |
-| `commits` | string[] | no | Lines shown in the detail page's `commit_log/` terminal box; if omitted, generated from `status`/`tags`/`date` |
-| `media` | array | no | Images and videos shown in the project's gallery |
-| `links` | object | no | External links (`demo`, `github`, `itch.io`, etc.) |
+### Step-by-step
 
-### Media entry
+1. **Planner**
+   - Reads the request
+   - Asks clarifying questions first
+   - Confirms scope and acceptance criteria
+   - Writes the implementation plan to `WORKFLOW_STATE.md`
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | `"image"` or `"video"` | Media type |
-| `src` | string | Images: path relative to the project folder. Videos: either a direct video file URL (`.mp4`/`.webm`/`.ogg`/`.mov`, hosted externally) or an **embed URL** (YouTube/Vimeo/itch.io). |
-| `caption` | string | Optional caption |
-| `cardPreview` | boolean | Video entries only. Marks this clip as the one to autoplay on the project's grid card (home/work) instead of the static `thumbnail` image. See below. |
+2. **Debater**
+   - Reviews the planner’s proposal
+   - Decides whether a meaningfully better plan exists
+   - Writes feedback into `WORKFLOW_STATE.md`
 
-**Video playback.** A direct video file (`src` ending in `.mp4`/`.webm`/etc.) renders as an HTML5 `<video>` and always autoplays muted/looped on the project's detail page. A YouTube or Vimeo embed URL renders as an `<iframe>` and also autoplays muted on the detail page (autoplay params are appended automatically — just use the plain embed URL). Muted autoplay is a browser requirement, not a choice; visitors can unmute via the native video controls.
+3. **Implementor**
+   - Applies the approved plan
+   - Makes the smallest useful code changes
+   - Records changed files and implementation notes
 
-**Card grid autoplay.** Only a *direct video file* can autoplay as a card preview (home/work grids) — either the first `media` entry if it's a direct video, or whichever entry has `"cardPreview": true`. YouTube/Vimeo embeds are intentionally excluded from card previews: autoplaying several embedded players at once across a grid is heavy and often silently blocked by the browser, so those still show the static `thumbnail` image on cards and only autoplay once you're on the single-item detail page.
+For UI work, the planner may first hand the task to the **Designer**. The designer inspects the existing product and records implementation-ready layout, visual hierarchy, responsive behavior, and interaction states in `WORKFLOW_STATE.md`. The implementor then applies that guidance.
 
-```json
-"media": [
-  { "type": "video", "src": "https://cdn.example.com/driftwake/clip.mp4", "caption": "Storm gameplay", "cardPreview": true },
-  { "type": "video", "src": "https://www.youtube.com/embed/xxxxxxxx", "caption": "Full trailer" }
-]
+4. **Reviewer**
+   - Reviews the implementation against the plan and acceptance criteria
+   - Flags risks, side effects, or incomplete work
+
+5. **Tester**
+   - Runs the smallest relevant test set
+   - Records commands and results
+
+6. **Linter**
+   - Runs the project’s lint/check script
+   - Records pass/fail and findings
+
+7. **Commit-message**
+   - Reads the final diff and workflow state
+   - Prints a conventional commit message
+
+---
+
+## Repository structure
+
+```text
+.
+├─ AGENTS.md
+├─ WORKFLOW_STATE.md
+└─ .codex/
+   └─ agents/
+      ├─ planner.md
+      ├─ debater.md
+      ├─ designer.md
+      ├─ implementor.md
+      ├─ reviewer.md
+      ├─ tester.md
+      ├─ linter.md
+      └─ commit-message.md
 ```
 
-**Don't commit `.mp4` files.** Git keeps every version in history forever
-and bloats repo size over time, with no streaming/transcoding benefit on
-GitHub Pages. Host trailers externally (YouTube unlisted, itch.io, Vimeo,
-or a CDN for a direct file) and reference the URL in `src`. Images stay
-in-repo since they're small and load directly.
+### Files
 
-## Local preview
+- `AGENTS.md`
+  - Shared rules for all agents in this project
+  - Loaded into OpenCode’s context for project-specific behavior [page:2]
 
-No build step is required — just serve the folder statically, e.g.:
+- `WORKFLOW_STATE.md`
+  - Shared state and handoff record between agents
+  - Keeps planning, decisions, status, and outputs in one place
 
-```sh
-npx serve .
-# or
-python3 -m http.server 8000
+- `.codex/agents/*.md`
+  - Project-specific agent definitions
+  - Each Markdown filename identifies a specialist role
+
+---
+
+## Core design ideas
+
+### 1. Shared rules
+
+`AGENTS.md` acts like the project constitution.
+
+It defines workflow-wide behavior, such as:
+- all agents must read `WORKFLOW_STATE.md`
+- all agents must update only the sections relevant to their role
+- agents should prefer Context7 when docs lookup is useful
+- the workflow order and handoff expectations
+
+OpenCode explicitly supports a root `AGENTS.md` file for project-specific instructions. [page:2]
+
+### 2. Shared state
+
+`WORKFLOW_STATE.md` acts like the workflow notebook.
+
+Instead of relying only on chat history, agents use a persistent file to coordinate:
+- clarified scope
+- open questions
+- constraints
+- acceptance criteria
+- plan
+- debate notes
+- implementation notes
+- review findings
+- test and lint results
+- commit message draft
+
+This makes the workflow more transparent and easier to debug.
+
+### 3. Scoped permissions
+
+Each agent gets only the permissions it needs.
+
+For example:
+- planner, debater, designer, reviewer, tester, linter, and commit-message may only edit `WORKFLOW_STATE.md`
+- implementor can edit code
+- tester and linter can run only approved commands
+- planner can invoke only the intended downstream agents
+
+OpenCode supports per-agent permissions for `edit`, `bash`, `webfetch`, and task invocation. [page:1]
+
+---
+
+## Example permissions
+
+For an agent that should only update `WORKFLOW_STATE.md`:
+
+```yaml
+permission:
+  edit:
+    "*": deny
+    "WORKFLOW_STATE.md": allow
 ```
 
-Then open `index.html` in a browser. `projects.json` must exist locally for
-the site to render (it's generated automatically on `main` by the Action;
-for local testing you can run the same merge logic manually or just keep
-the checked-in copy up to date).
+OpenCode supports granular path-based permissions, and the last matching rule takes precedence. [page:1]
 
-## File structure
+For a linter that should run only a Python script:
 
-```
-portfolio/
-├── bundled-backup.html          # Original design (source of design/functionality reference)
-├── index.html                   # Single-page app shell — home/work/about/contact/detail
-├── project.html                 # Legacy redirect: ?id=X → index.html#/project/X
-├── projects.json                # Auto-generated manifest — do not edit by hand
-├── assets/
-│   ├── style.css                # CRT terminal theme, responsive layout
-│   ├── info.js                  # All your editable site text — name, nav, copy, contact, socials
-│   └── app.js                   # Routing/render/filter/lightbox/intro/shader logic
-├── projects/
-│   └── Driftwake/
-│       ├── index.json
-│       ├── thumbnail.png
-│       └── screenshot1.png
-├── .github/workflows/update-manifest.yml
-└── README.md
+```yaml
+permission:
+  edit:
+    "*": deny
+    "WORKFLOW_STATE.md": allow
+  bash:
+    "*": deny
+    "python scripts/lint.py*": allow
+    "python3 scripts/lint.py*": allow
 ```
 
-## Known tradeoffs
+OpenCode also supports command-pattern rules for bash permissions. [page:1]
 
-- Since content renders client-side via JS, individual project pages don't
-  get per-project Open Graph tags, so social-media link previews will be
-  generic rather than project-specific.
-- The animated CRT boot intro plays once per browser session
-  (`sessionStorage`) and can be replayed anytime via the `./intro.sh`
-  button in the header.
-- The contact form has no backend (this is a static site) — submitting it
-  opens the visitor's email client via a pre-filled `mailto:` link.
+---
+
+## Models and temperature
+
+Each agent can use its own model and temperature.
+
+Typical strategy:
+- low temperature for planner, reviewer, tester, and linter
+- slightly higher temperature for debater
+- stronger model for planner and implementor
+- faster or cheaper model for narrow support roles
+
+OpenCode supports per-agent `model`, `temperature`, `max_steps`, and `mode` settings. [page:1]
+
+---
+
+## MCP support
+
+This workflow can be extended with MCP tools such as:
+- **Context7** for up-to-date documentation lookup
+
+If configured in OpenCode, these tools can be encouraged through `AGENTS.md` and agent prompts so the planner, implementor, and reviewer use them when helpful. OpenCode exposes MCP servers as tools once they are configured and enabled. [page:1]
+
+---
+
+## Getting started
+
+### 1. Copy the files into your repo
+
+Place:
+- `AGENTS.md` in the project root
+- `WORKFLOW_STATE.md` in the project root
+- all agent markdown files inside `.codex/agents/`
+
+Design work can use the installed `frontend-design` skill. The designer may use `figma` for Figma workflows and `playwright` for browser-based visual checks when those tools are configured.
+
+### 2. Adjust commands
+
+Update:
+- test commands in `tester.md`
+- lint/check commands in `linter.md`
+- model IDs in each agent file
+- any MCP-related instructions if you use Context7
+
+### 3. Start OpenCode in the project
+
+Run OpenCode from the root of your repository so project-level rules and agents are picked up correctly.
+
+### 4. Start with the planner
+
+Example:
+
+```bash
+opencode run --agent planner "Add a settings page where users can update their profile and notification preferences"
+```
+
+The planner should:
+- ask clarifying questions first
+- write the clarified scope to `WORKFLOW_STATE.md`
+- generate a plan
+- hand off to the next agent
+
+---
+
+## Recommended usage
+
+This setup works best when:
+- the task is non-trivial
+- you want a visible plan and review trail
+- you care about safe permissions
+- you want reusable workflow behavior across repos
+
+It is especially useful for:
+- feature work
+- refactors
+- bug fixes with multiple steps
+- code review and validation flows
+- local-first AI development setups
+
+---
+
+## Customization ideas
+
+You can extend this repo with additional agents such as:
+- `security-reviewer`
+- `docs-writer`
+- `release-notes`
+- `migration-planner`
+- `performance-reviewer`
+
+OpenCode lets you create additional agents and restrict which subagents can be invoked with task permissions. [page:1]
+
+---
+
+## Notes
+
+- `AGENTS.md` is for shared instructions, not shared memory
+- `WORKFLOW_STATE.md` is the canonical handoff file
+- the agent markdown filename becomes the agent name
+- the planner is intentionally clarification-first
+- the debater is intentionally narrow: it reviews the plan and checks whether a better one exists
+
+---
+
+## Credits
+
+Built for OpenCode’s project-level agent system and rule files.
+
+Relevant docs:
+- OpenCode Agents: https://opencode.ai/docs/agents/
+- OpenCode Rules: https://opencode.ai/docs/rules/
+
+---
+
+## Watch on YouTube
+https://youtu.be/kE6x7xKy4lM?si=_dCDpZVN_vOZZSzL
+
+---
+
+## License
+
+MIT — feel free to copy, adapt, and share.
