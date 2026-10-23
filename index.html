@@ -1,252 +1,67 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>A.Voss — Portfolio</title>
-<meta name="description" id="meta-description" content="Programmer building across games, software and apps.">
-<link rel="stylesheet" href="./assets/style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#080e1e">
+  <meta name="description" content="Hazwan — product design and creative development. A journey through perspective, selected studies, and new conversations.">
+  <title>Hazwan — A little perspective</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23080e1e'/%3E%3Cpath d='M9 8v16M23 8v16M9 16h14' fill='none' stroke='%23e9f1e8' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./assets/journey-v2/styles.css">
+  <link rel="stylesheet" href="./assets/journey-v2/project-pages.css">
 </head>
-<body class="scan">
+<body>
+  <a class="skip-link" href="#about">Skip to about me</a>
+  <div id="world" aria-hidden="true"></div>
+  <div class="scene-shade" aria-hidden="true"></div>
 
-  <canvas id="bg-canvas"></canvas>
-  <a class="skip-link" href="#main-content">Skip to content</a>
-
-  <button type="button" class="term-btn accent-toggle" id="accent-toggle">accent: green</button>
-
-  <!-- ============ CRT boot intro ============ -->
-  <div class="intro-overlay" id="intro-overlay">
-    <div class="intro-screen">
-      <div class="intro-inner">
-        <div class="intro-log-wrap">
-          <canvas id="boot-canvas" style="width:100%;height:100%;display:block;"></canvas>
-        </div>
-        <button type="button" class="term-btn solid" id="intro-enter" style="display:block;margin:18px auto 0;">./home.sh --enter</button>
-      </div>
-      <div class="crt-scanlines"></div>
-      <div class="crt-glass-sheen"></div>
-    </div>
-  </div>
-  <div class="intro-vignette" id="intro-vignette"></div>
-
-  <!-- ============ main app ============ -->
-  <div id="app">
-
-    <nav class="term-tabs" id="term-tabs">
-      <a class="term-tab" href="#home" data-page="home"><i class="dot"></i><span id="nav-label-home">home.sh</span></a>
-      <a class="term-tab" href="#work" data-page="work"><i class="dot"></i><span id="nav-label-work">work.sh</span></a>
-      <a class="term-tab" href="#about" data-page="about"><i class="dot"></i><span id="nav-label-about">about.sh</span></a>
-      <a class="term-tab" href="#contact" data-page="contact"><i class="dot"></i><span id="nav-label-contact">contact.sh</span></a>
+  <header class="masthead">
+    <a class="wordmark" href="#hello" aria-label="Hazwan, back to the beginning"><svg viewBox="0 0 24 28" aria-hidden="true"><path d="M3 2v24M21 2v24M3 14h18"/></svg><span>Hazwan<span class="identity-caption">Design &amp; creative development</span></span></a>
+    <nav class="main-nav" aria-label="Portfolio navigation">
+      <a href="#about">About</a><a href="#projects">Projects</a><a href="#contact">Contact</a>
+      <button id="menu-toggle" class="menu-toggle" type="button" aria-expanded="false" aria-controls="more-menu" aria-label="More options"><span></span><span></span></button>
     </nav>
+    <div id="more-menu" class="more-menu" hidden><button type="button" id="reading-toggle">Read as a page</button></div>
+  </header>
 
-    <main class="shell" id="main-content" tabindex="-1">
-      <div class="masthead-bar">
-        <span class="logo glow" id="logo">A.VOSS<span class="caret"></span></span>
-        <div class="masthead-actions">
-          <button type="button" class="term-btn small" id="intro-replay">./intro.sh</button>
-          <button type="button" class="term-btn solid" id="nav-contact-cta" data-goto="contact">get_in_touch()</button>
-        </div>
-      </div>
+  <p id="render-note" class="render-note" role="status" hidden>The visual journey is unavailable. The complete portfolio is here to read.</p>
+  <div id="journey-track" class="journey-track" aria-hidden="true"></div>
 
-      <!-- ---------- home ---------- -->
-      <section class="wrap page" id="home" aria-label="Home">
-        <section style="padding:80px 0 24px;">
-          <div class="prompt-block">
-            <span class="ghost" id="home-prompt-ghost">&gt; whoami</span>
-            <span class="live" id="home-prompt-live">&gt; whoami<span class="caret"></span></span>
-          </div>
-          <div class="title-block">
-            <h1 class="ghost glow-heading" id="home-title-ghost">Programmer, building across games, software, apps &amp; the web.</h1>
-            <h1 class="live glow-heading" id="home-title-live">Programmer, building across games, software, apps &amp; the web.</h1>
-          </div>
-          <p class="lede" id="home-lede">A working record of shipped projects — from indie game prototypes to production software, native apps and the odd stubborn website.</p>
-          <div style="display:flex;gap:16px;margin-top:36px;">
-            <button type="button" class="term-btn solid" id="home-cta-primary" data-goto="work">view_work --all</button>
-            <button type="button" class="term-btn" id="home-cta-secondary" data-goto="about">about.sh</button>
-          </div>
-        </section>
+  <main id="portfolio">
+    <section id="hello" class="scene-panel hello-panel" data-start="0" data-end="0.10" aria-labelledby="hello-heading" tabindex="-1">
+      <div class="hello-center"><p class="intro-name">A little perspective, by Hazwan</p><h1 id="hello-heading">Hello<span class="hello-period">.</span></h1><p class="hello-line">Good things begin with curiosity.</p></div>
+      <div class="hello-footnote"><p>Product design.<br>Creative development.</p><span>From Singapore,<br>with a wider view.</span></div>
+    </section>
 
-        <section class="stats">
-          <div><div class="stat-num" id="stat-years">—</div><div class="stat-label" id="stat-label-years">years_shipping</div></div>
-          <div><div class="stat-num" id="stat-projects">—</div><div class="stat-label" id="stat-label-projects">projects_shipped</div></div>
-          <div><div class="stat-num" id="stat-disciplines">—</div><div class="stat-label" id="stat-label-disciplines">disciplines</div></div>
-          <div><div class="stat-num" id="stat-wip">—</div><div class="stat-label" id="stat-label-wip">unfinished_builds</div></div>
-        </section>
+    <section id="about" class="scene-panel about-panel" data-start="0.22" data-end="0.48" aria-labelledby="about-heading" tabindex="-1">
+      <div class="about-copy"><p class="section-label">A little about me</p><h2 id="about-heading">Find the human<br>in the system.</h2><p class="standfirst">I'm Hazwan, a product designer<br class="desktop-break"> and creative developer.</p><div class="body-copy"><p>Every product carries a lot beneath its surface: people's habits, a team's intentions, the choices that came before.</p><p>I work where those things meet. Research helps me understand the real question. Design gives it shape. Code lets me see how it feels.</p></div><ul class="disciplines" aria-label="Disciplines"><li>Product thinking</li><li>Visual systems</li><li>Creative development</li></ul></div>
+      <p class="world-annotation">A little structure.<br>Room to explore.</p>
+    </section>
 
-        <section style="padding:48px 0 72px;">
-          <span class="section-label" id="label-selected-work">selected_work/</span>
-          <div class="grid" id="home-grid"><div class="state-box">Loading projects…</div></div>
-        </section>
-      </section>
+    <div class="scene-panel solar-intro" data-start="0.49" data-end="0.574" aria-hidden="true"><p class="section-label">Selected studies</p><p>A few ideas.<br>A wider orbit.</p><span>Projects shaped by curiosity.</span></div>
 
-      <!-- ---------- work ---------- -->
-      <section class="wrap page" id="work" aria-label="Work" style="padding-bottom:80px;">
-        <section style="padding:56px 0 8px;">
-          <div class="prompt-block">
-            <span class="ghost" id="work-prompt-ghost">&gt; ls work/</span>
-            <span class="live" id="work-prompt-live">&gt; ls work/<span class="caret"></span></span>
-          </div>
-          <div class="title-block">
-            <h1 class="ghost glow-heading small" id="work-title-ghost">All work</h1>
-            <h1 class="live glow-heading small" id="work-title-live">All work</h1>
-          </div>
-          <p style="font-size:14px;color:var(--text);opacity:0.7;margin-top:14px;" id="work-count"></p>
-          <div class="filters" id="work-filters"></div>
-        </section>
-        <section style="padding:32px 0 60px;">
-          <div class="grid" id="work-grid"><div class="state-box">Loading projects…</div></div>
-        </section>
-      </section>
+    <section id="projects" class="scene-panel project-panel" data-start="0.565" data-end="0.83" aria-labelledby="projects-heading" tabindex="-1">
+      <div class="project-preview"><div class="project-preview-stage" id="project-mount" aria-live="polite"></div></div>
+      <div class="project-copy"><p class="section-label">Selected projects</p><h2 id="projects-heading">Projects</h2><p class="project-premise">A few ideas.<br>A wider orbit.</p><p class="body-copy">Explore selected projects and the questions behind them.</p></div>
+    </section>
 
-      <!-- ---------- about ---------- -->
-      <section class="wrap page" id="about" aria-label="About" style="padding-bottom:80px;">
-        <section style="padding:56px 0 0;">
-          <div class="prompt-block">
-            <span class="ghost" id="about-prompt-ghost">&gt; cat about.sh</span>
-            <span class="live" id="about-prompt-live">&gt; cat about.sh<span class="caret"></span></span>
-          </div>
-          <div class="title-block">
-            <h1 class="ghost glow-heading about" id="about-title-ghost">Ten years turning ideas into working software.</h1>
-            <h1 class="live glow-heading about" id="about-title-live">Ten years turning ideas into working software.</h1>
-          </div>
-        </section>
+    <div class="scene-panel return-message" data-start="0.85" data-end="0.93" aria-hidden="true"><p>Back to earth.</p><span>Every good conversation starts somewhere.</span></div>
 
-        <section class="about-grid">
-          <div>
-            <span class="section-label" id="label-bio">bio/</span>
-            <div id="about-bio"></div>
-          </div>
-          <div>
-            <span class="section-label" id="label-skills">skills/</span>
-            <div class="skills-table" id="about-skills-table"></div>
-          </div>
-        </section>
+    <section id="contact" class="scene-panel contact-panel" data-start="0.94" data-end="1" aria-labelledby="contact-heading" tabindex="-1">
+      <div class="contact-copy"><p class="section-label">A new conversation</p><h2 id="contact-heading">Where<br>to next?</h2><p class="contact-intro">Have a question worth exploring?<br>I'd love to hear what you're thinking.</p><a class="contact-email" href="mailto:hello@hazwan.design">hello@hazwan.design<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 17 17 3M3 3h14v14"/></svg></a><p class="contact-signoff">Thanks for the journey.<br>Let's make something worth the trip.</p><a class="back-to-start" href="#hello">Back to the beginning <span>↑</span></a></div>
+      <p class="city-annotation">Big ideas.<br>Human scale.</p>
+    </section>
+  </main>
 
-        <section class="subsection">
-          <span class="section-label" id="label-education">education/</span>
-          <pre class="ascii-box" id="about-education"></pre>
-        </section>
+  <nav id="orbit-control" class="orbit-control" aria-label="Project navigation" hidden>
+    <div class="orbit-label"><span class="orbit-selection"><span id="project-number">01</span><span id="project-count"> / 00</span></span><span id="orbit-stops" class="orbit-stops"></span></div>
+  </nav>
+  <section id="project-detail" class="project-detail-mount" aria-label="Project details" hidden></section>
 
-        <section class="subsection" style="padding-bottom:56px;">
-          <span class="section-label" id="label-timeline">timeline/</span>
-          <pre class="ascii-box" id="about-timeline"></pre>
-        </section>
-      </section>
-
-      <!-- ---------- detail ---------- -->
-      <section class="wrap page" id="project-details" aria-label="Project details" hidden style="padding-bottom:80px;">
-        <section style="padding:48px 0 0;">
-          <button type="button" class="term-btn small" data-goto="work">&lt; back to work</button>
-        </section>
-        <section style="padding:24px 0 0;">
-          <div class="prompt-block">
-            <span class="ghost" id="detail-prompt-ghost"></span>
-            <span class="live" id="detail-prompt-live"></span>
-          </div>
-          <div class="title-block" style="margin-top:12px;">
-            <h1 class="ghost glow-heading detail" id="detail-title-ghost"></h1>
-            <h1 class="live glow-heading detail" id="detail-title" tabindex="-1"></h1>
-          </div>
-          <div class="detail-badges" id="detail-badges"></div>
-        </section>
-
-        <section class="detail-grid">
-          <div class="detail-media-row">
-             <button type="button" class="term-btn small" id="detail-prev" aria-label="Previous project media">&lt;</button>
-            <div class="img-hover-wrap" id="detail-media-wrap">
-              <div id="detail-media-slot"></div>
-              <div class="zoom-icon">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              </div>
-              <span class="media-counter" id="detail-media-counter" style="display:none;"></span>
-            </div>
-             <button type="button" class="term-btn small" id="detail-next" aria-label="Next project media">&gt;</button>
-          </div>
-          <div class="detail-desc">
-            <h2 id="detail-subhead"></h2>
-            <p id="detail-long"></p>
-          </div>
-        </section>
-
-        <section class="section-split">
-          <div>
-            <span class="section-label" id="label-stack">stack/</span>
-            <div class="tag-row" id="detail-stack"></div>
-          </div>
-          <div>
-            <span class="section-label" id="label-commit-log">commit_log/</span>
-            <div class="commit-log" id="detail-commits"></div>
-          </div>
-        </section>
-
-        <section class="section-split" style="border-top:none;padding-top:0;">
-          <div>
-            <span class="section-label" id="label-links">links/</span>
-            <div class="links-list" id="detail-links"></div>
-          </div>
-        </section>
-      </section>
-
-      <!-- ---------- contact ---------- -->
-      <section class="wrap page" id="contact" aria-label="Contact" style="padding-bottom:80px;">
-        <section style="padding:56px 0 0;">
-          <div class="prompt-block">
-            <span class="ghost" id="contact-prompt-ghost">&gt; ./contact.sh --init</span>
-            <span class="live" id="contact-prompt-live">&gt; ./contact.sh --init<span class="caret"></span></span>
-          </div>
-          <div class="title-block">
-            <h1 class="ghost glow-heading contact" id="contact-title-ghost">Let's build something.</h1>
-            <h1 class="live glow-heading contact" id="contact-title-live">Let's build something.</h1>
-          </div>
-          <p class="lede" style="max-width:52ch;" id="contact-lede">Open to freelance work and interesting collaborations. Fill in the fields below or reach out directly.</p>
-        </section>
-
-        <section class="contact-grid">
-          <div class="term-card" style="cursor:default;">
-            <form class="contact-form" id="contact-form">
-              <label>$ name --input<input type="text" placeholder="jane_doe" class="term-input" name="name"></label>
-              <label>$ email --input<input type="email" placeholder="jane@doe.com" class="term-input" name="email"></label>
-              <label>$ message --input<textarea rows="4" placeholder="describe the project..." class="term-input" name="message" style="resize:vertical;"></textarea></label>
-              <button type="submit" class="term-btn solid" id="contact-send" style="align-self:flex-start;">./send.sh</button>
-            </form>
-          </div>
-          <div>
-            <span class="section-label" id="label-direct">direct/</span>
-            <div class="links-list" id="contact-direct-links"></div>
-            <div class="status-box" id="contact-status-box"></div>
-          </div>
-        </section>
-      </section>
-
-      <!-- ---------- 404 ---------- -->
-      <div class="wrap page" id="page-404" style="display:none; padding-top:100px; padding-bottom:100px; text-align:center;">
-        <div class="prompt-block"><span class="live" style="position:static;">&gt; cat: not_found<span class="caret"></span></span></div>
-        <h1 class="glow-heading small">404 — project not found</h1>
-        <p class="lede" style="margin:20px auto 30px;">This project doesn't exist, or was removed.</p>
-        <button type="button" class="term-btn" data-goto="work">&lt; back to work</button>
-      </div>
-
-    </main>
-
-    <footer class="site-footer" id="site-footer-text">
-      built with vanilla html/css/js · projects.json manifest generated by github actions
-    </footer>
-  </div>
-
-  <!-- ============ lightbox ============ -->
-  <div class="lightbox-overlay" id="lightbox" role="dialog" aria-modal="true" aria-label="Project image viewer" tabindex="-1">
-    <button type="button" class="term-btn lightbox-close" id="lb-close">[ x ] close</button>
-    <div class="lightbox-inner">
-      <div class="lightbox-row">
-        <button type="button" class="term-btn" id="lb-prev" aria-label="Previous image" style="font-size:16px;padding:10px 14px;display:none;">&lt;</button>
-        <img id="lb-img" src="" alt="">
-        <button type="button" class="term-btn" id="lb-next" aria-label="Next image" style="font-size:16px;padding:10px 14px;display:none;">&gt;</button>
-      </div>
-      <span class="lightbox-caption" id="lb-caption" style="display:none;"></span>
-    </div>
-  </div>
-
+  <footer class="journey-footer"><span class="footer-place"><i></i> Singapore <span>1°17′ N · 103°51′ E</span></span><span id="scene-label" class="scene-label">A little perspective</span><a id="scroll-cue" class="scroll-cue" href="#about"><span id="scroll-cue-text">Scroll to explore</span><svg viewBox="0 0 15 24" aria-hidden="true"><path d="M7.5 1v21M2 16.5 7.5 22l5.5-5.5"/></svg></a></footer>
+  <div class="page-progress" aria-hidden="true"><span id="page-progress-fill"></span></div>
+  <noscript><style>#world,.scene-shade,.journey-track,.orbit-control,.journey-footer,.page-progress,.menu-toggle{display:none}</style><p class="projects-no-script">Projects are unavailable without JavaScript. Enable JavaScript to see project details. The About and Contact sections remain available here.</p></noscript>
   <script src="./assets/info.js"></script>
-  <script src="./assets/app.js"></script>
+  <script type="module" src="./assets/journey-v2/app.js"></script>
 </body>
 </html>

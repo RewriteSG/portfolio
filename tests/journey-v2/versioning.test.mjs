@@ -1,0 +1,88 @@
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import path from 'node:path';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const fixture = JSON.parse(readFileSync(path.join(projectRoot, 'tests/journey-v2/fixtures/journey-reference-hashes.json'), 'utf8'));
+const referenceRoot = process.env.JOURNEY_REFERENCE_ROOT || 'D:/Github/GitHub/Github/portfolio';
+const referenceFiles = Object.keys(fixture).sort();
+const sha256 = file => createHash('sha256').update(readFileSync(file)).digest('hex');
+const read = file => readFileSync(path.join(projectRoot, file), 'utf8');
+
+test('reference fixture covers every immutable Journey and shared source file', () => {
+  const journeyRoot = path.join(referenceRoot, 'overwrite-design/dist/journey');
+  const sourceFiles = readdirSync(journeyRoot)
+    .map(name => `overwrite-design/dist/journey/${name}`)
+    .filter(file => statSync(path.join(referenceRoot, file)).isFile());
+  sourceFiles.push('overwrite-design/dist/vendor/three.module.js', 'overwrite-design/dist/assets/raleway.woff2');
+  assert.deepEqual(referenceFiles, sourceFiles.sort());
+
+  for (const [source, expectedHash] of Object.entries(fixture)) {
+    assert.equal(sha256(path.join(referenceRoot, source)), expectedHash, `${source} changed from its recorded reference`);
+  }
+});
+
+test('root HTML loads only the Journey V2 production shell in the required order', () => {
+  const html = read('index.html');
+  assert.match(html, /<script\s+src=["']\.\/assets\/info\.js["']\s*><\/script>/i);
+  assert.match(html, /<link\s+rel=["']stylesheet["']\s+href=["']\.\/assets\/journey-v2\/styles\.css["']/i);
+  assert.match(html, /<link\s+rel=["']stylesheet["']\s+href=["']\.\/assets\/journey-v2\/project-pages\.css["']/i);
+  assert.match(html, /<script\s+type=["']module["']\s+src=["']\.\/assets\/journey-v2\/app\.js["']\s*><\/script>/i);
+  assert.ok(html.indexOf('./assets/info.js') < html.indexOf('./assets/journey-v2/app.js'), 'info.js must load before the V2 module');
+  const stylesheets = [...html.matchAll(/<link\b[^>]*rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*>/gi)].map(match => match[1]).sort();
+  assert.deepEqual(stylesheets, ['./assets/journey-v2/project-pages.css', './assets/journey-v2/styles.css'].sort());
+  const scripts = [...html.matchAll(/<script\b[^>]*src=["']([^"']+)["'][^>]*>/gi)].map(match => match[1]).sort();
+  assert.deepEqual(scripts, ['./assets/info.js', './assets/journey-v2/app.js'].sort());
+  assert.doesNotMatch(html, /overwrite-design\//i);
+  for (const asset of ['./assets/style.css', './assets/app.js']) {
+    assert.ok(!html.includes(asset), `legacy rollback asset referenced: ${asset}`);
+  }
+});
+
+test('Journey V2 includes all required copied assets', () => {
+  const required = [
+    'assets/journey-v2/app.js',
+    'assets/journey-v2/styles.css',
+    'assets/journey-v2/project-pages.css',
+    'assets/journey-v2/scene.js',
+    'assets/journey-v2/earth.js',
+    'assets/journey-v2/city.js',
+    'assets/journey-v2/vendor/three.module.js',
+    'assets/journey-v2/fonts/raleway.woff2',
+  ];
+  for (const file of required) assert.ok(existsSync(path.join(projectRoot, file)), `missing ${file}`);
+});
+
+test('module imports and CSS URLs resolve within the Journey V2 production boundary', () => {
+  const assetsRoot = path.join(projectRoot, 'assets/journey-v2');
+  const moduleFiles = ['app.js', 'scene.js', 'earth.js', 'city.js'];
+  for (const file of moduleFiles) {
+    const source = read(`assets/journey-v2/${file}`);
+    const imports = [...source.matchAll(/\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(['"]([^'"]+)['"]\)/g)];
+    for (const match of imports) {
+      const value = match[1] || match[2];
+      assert.ok(!value.startsWith('/') && !/^[a-z]+:/i.test(value), `${file} has a non-local import: ${value}`);
+      assert.ok(existsSync(path.resolve(path.dirname(path.join(assetsRoot, file)), value)), `${file} import does not resolve: ${value}`);
+    }
+  }
+
+  const css = `${read('assets/journey-v2/styles.css')}\n${read('assets/journey-v2/project-pages.css')}`;
+  for (const [, value] of css.matchAll(/url\(\s*['"]?([^)'"\s]+)['"]?\s*\)/g)) {
+    if (/^(?:data:|https?:|#)/i.test(value)) continue;
+    assert.ok(!value.startsWith('/'), `CSS URL must be relative: ${value}`);
+    assert.ok(existsSync(path.resolve(assetsRoot, value)), `CSS URL does not resolve inside Journey V2: ${value}`);
+  }
+});
+
+test('static Journey shell has identity, About, Contact, mounts, and no prototype project studies', () => {
+  const html = read('index.html');
+  for (const id of ['hello', 'about', 'contact', 'world', 'journey-track', 'orbit-control', 'project-detail']) {
+    assert.match(html, new RegExp(`id=["']${id}["']`), `missing ${id} mount/section`);
+  }
+  assert.match(html, /<noscript>[\s\S]*?<\/noscript>/i);
+  assert.match(html, /project[^<]{0,100}(?:JavaScript|javascript|script)[^<]{0,100}(?:enabled|enable|requires)/i);
+  assert.doesNotMatch(html, /Northstar|Lumen|Field Notes/i);
+});

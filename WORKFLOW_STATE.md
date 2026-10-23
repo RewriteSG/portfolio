@@ -231,3 +231,13 @@
 - Reviewed `docs/superpowers/specs/2026-10-24-journey-v2-root-design.md` against the current manifest workflow, `assets/info.js`, project data, legacy redirect, and existing safety helpers.
 - No planning-critical unanswered questions remain; implementation details left open are reasonable builder decisions within the stated constraints.
 - Handoff: proceed to the detailed implementation plan and workflow debate/design review.
+
+## Implementor Handoff — Journey V2 Task 1 (2026-10-24)
+- Added the immutable production copy under `assets/journey-v2/` and changed local Three.js/font URLs to resolve inside that boundary.
+- Replaced root `index.html` with the Journey Hello/About/Projects/Contact shell, empty project/orbit/detail mounts, and a no-JavaScript projects note. `assets/info.js` loads before the V2 module; legacy root `assets/app.js` and `assets/style.css` were untouched.
+- Removed the prototype project-pages import/initialization and sample planet labels from the V2 app/scene. No project-page renderer or project records are included yet; Task 3 owns that mount-point integration.
+- Recorded SHA-256 hashes for all eight Journey source files plus shared Three.js and Raleway sources in `tests/journey-v2/fixtures/journey-reference-hashes.json`.
+- RED: initial focused run failed 5/5 as expected for missing V2 assets/root markup; it also exposed a Windows path-separator normalization issue in the test, corrected before GREEN.
+- GREEN: `node --test tests/journey-v2/versioning.test.mjs` — 5 passed, 0 failed. Four `node --check` module syntax checks and `git diff --check` also passed. Reference hash equality is covered by the focused test.
+- Context7 and Serena tools were unavailable in this session; the copied modules use existing local vanilla browser APIs and Three.js.
+- Next: reviewer / subsequent implementation tasks can consume `#project-mount`, `#orbit-stops`, and `#project-detail`; project content and detail behavior are intentionally pending.
