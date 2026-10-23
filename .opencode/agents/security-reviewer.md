@@ -1,7 +1,7 @@
 ---
 description: Security expert that performs a focused security review of recent changes
 mode: subagent
-model: ollama/qwen3.6:27b
+model: openai/gpt-6-luna
 temperature: 0.05
 maxsteps: 6
 permission:

@@ -1,7 +1,7 @@
 ---
 description: Generates the final commit message from the code changes and workflow state
 mode: subagent
-model: github-copilot/gpt-5-mini
+model: openai/gpt-6-luna
 temperature: 0.2
 max_steps: 3
 permission:

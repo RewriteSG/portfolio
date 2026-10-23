@@ -1,7 +1,7 @@
 ---
 description: Runs the relevant tests and records the outcome in WORKFLOW_STATE.md
 mode: subagent
-model: github-copilot/gpt-5-mini
+model: openai/gpt-6-luna
 temperature: 0.0
 max_steps: 6
 permission:

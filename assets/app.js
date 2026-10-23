@@ -38,6 +38,28 @@
     });
   }
 
+  // Manifest data is external input even though the current source is generated
+  // by this repository. Keep remote content to navigable HTTP(S) URLs and local
+  // media inside its project directory.
+  function safeHttpUrl(value) {
+    if (typeof value !== 'string' || !value.trim()) return null;
+    try {
+      var url = new URL(value, window.location.href);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+      return url.href;
+    } catch (e) { return null; }
+  }
+
+  function safeProjectId(id) {
+    return typeof id === 'string' && /^[a-z0-9_-]+$/i.test(id) ? id : null;
+  }
+
+  function safeEmail(value) {
+    return typeof value === 'string' && value.length <= 254 &&
+      /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i.test(value)
+      ? value : null;
+  }
+
   function sortProjects(projects) {
     return projects.slice().sort(function (a, b) {
       var orderA = typeof a.order === 'number' ? a.order : -Infinity;
@@ -50,16 +72,21 @@
   }
 
   function mediaUrl(project, src) {
-    if (/^https?:\/\//i.test(src)) return src;
-    return './projects/' + project.id + '/' + src.replace(/^\.\//, '');
+    if (typeof src !== 'string' || !src.trim()) return null;
+    if (/^[a-z][a-z\d+.-]*:/i.test(src) || src.slice(0, 2) === '//') return safeHttpUrl(src);
+    var id = safeProjectId(project && project.id);
+    if (!id || src.charAt(0) === '/' || src.indexOf('\\') !== -1) return null;
+    var parts = src.replace(/^\.\//, '').split('/');
+    if (parts.some(function (part) { return !part || part === '.' || part === '..' || /%2f|%5c/i.test(part); })) return null;
+    return './projects/' + encodeURIComponent(id) + '/' + parts.map(encodeURIComponent).join('/');
   }
 
   // A "direct" video is a file the browser can play natively via <video>
   // (mp4/webm/ogg/mov) — whether that's a relative repo path or an
   // externally-hosted file link. Anything else that's an http(s) URL
   // (YouTube, Vimeo, itch.io, ...) is treated as an iframe embed.
-  function isDirectVideoFile(src) { return /\.(mp4|webm|ogv|ogg|mov)(\?.*)?$/i.test(src); }
-  function isIframeEmbed(src) { return /^https?:\/\//i.test(src) && !isDirectVideoFile(src); }
+  function isDirectVideoFile(src) { return typeof src === 'string' && /\.(mp4|webm|ogv|ogg|mov)(\?.*)?$/i.test(src); }
+  function isIframeEmbed(src) { return !!safeHttpUrl(src) && /^https?:\/\//i.test(src) && !isDirectVideoFile(src); }
   function isVideoEmbed(src) { return isIframeEmbed(src); } // back-compat alias
 
   // Appends provider-specific autoplay/mute query params so an iframe embed
@@ -104,11 +131,12 @@
 
   /* -------------------- WebGL background shader -------------------- */
 
-  var gl, glProg, uT, uR, uC, raf;
+  var gl, glProg, uT, uR, uC, raf, shaderTick;
 
   function setupShader() {
     var canvas = document.getElementById('bg-canvas');
     if (!canvas) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     canvas.width = 160;
     canvas.height = 90;
     try { gl = canvas.getContext('webgl'); } catch (e) { gl = null; }
@@ -146,6 +174,7 @@
     }
     function tick(t) {
       if (!gl) return;
+      if (document.hidden || !canvas.isConnected) return;
       var rgb = hexToRgb(ACCENTS[state.accent] || ACCENTS.green);
       gl.uniform1f(uT, t / 1000);
       gl.uniform3f(uC, rgb[0], rgb[1], rgb[2]);
@@ -153,7 +182,12 @@
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       raf = requestAnimationFrame(tick);
     }
+    shaderTick = tick;
     raf = requestAnimationFrame(tick);
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) cancelAnimationFrame(raf);
+      else if (shaderTick) raf = requestAnimationFrame(shaderTick);
+    });
   }
 
   /* -------------------- accent toggle -------------------- */
@@ -261,8 +295,9 @@
     var directEl = document.getElementById('contact-direct-links');
     if (directEl) {
       var links = [];
-      if (contact.email) links.push({ label: 'mailto:' + contact.email, url: 'mailto:' + contact.email, external: false });
-      (info.socials || []).forEach(function (s) { links.push({ label: s.label, url: s.url, external: true }); });
+      var email = safeEmail(contact.email);
+      if (email) links.push({ label: 'mailto:' + email, url: 'mailto:' + email, external: false });
+      (info.socials || []).forEach(function (s) { var url = safeHttpUrl(s.url); if (url) links.push({ label: s.label, url: url, external: true }); });
       directEl.innerHTML = links.map(function (l) {
         return '<a href="' + escapeHtml(l.url) + '"' + (l.external ? ' target="_blank" rel="noopener"' : '') + '>$ open ' + escapeHtml(l.label) + '</a>';
       }).join('');
@@ -540,6 +575,12 @@
 
   function startBootSequence() {
     var token = ++boot.token;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      boot.entries = boot.bootLines.slice(-12).map(function (text) { return { isLine: true, text: text }; });
+      boot.typing = '';
+      renderBootFrame();
+      return;
+    }
     function alive() { return boot.token === token; }
     boot.entries = []; boot.typing = '';
     var projects = boot.projects;
@@ -654,7 +695,7 @@
   function replayIntro() {
     state.introSeen = false;
     sessionStorage.removeItem('introSeen');
-    runIntro(function () { navigate('#/'); });
+    runIntro(function () { navigate('#home'); });
   }
 
   window.addEventListener('resize', function () {
@@ -669,6 +710,10 @@
   var typeTokens = {};
   function typeInto(el, text, withCaret, tokenKey) {
     if (!el) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      el.textContent = text;
+      return;
+    }
     var key = tokenKey || el;
     var token = (typeTokens[key] = (typeTokens[key] || 0) + 1);
     var i = 0;
@@ -704,8 +749,8 @@
   // often blocked; those only autoplay on the single-item detail page.
   function cardPreviewHtml(p) {
     var media = mediaFor(p);
-    var flagged = media.find(function (m) { return m.type === 'video' && m.cardPreview && isDirectVideoFile(m.src); });
-    var candidate = flagged || ((media[0] && media[0].type === 'video' && isDirectVideoFile(media[0].src)) ? media[0] : null);
+    var flagged = media.find(function (m) { return m.type === 'video' && m.cardPreview && isDirectVideoFile(m.src) && mediaUrl(p, m.src); });
+    var candidate = flagged || ((media[0] && media[0].type === 'video' && isDirectVideoFile(media[0].src) && mediaUrl(p, media[0].src)) ? media[0] : null);
     if (candidate) {
       var poster = thumbUrl(p);
       return '<video class="card-preview-video"' +
@@ -722,7 +767,7 @@
   function cardHtml(p) {
     var thumbHtml = cardPreviewHtml(p);
     return (
-      '<div class="term-card" data-nav="project" data-id="' + escapeHtml(p.id) + '">' +
+      '<div class="term-card" role="button" tabindex="0" aria-label="View details for ' + escapeHtml(p.name) + '" data-nav="project" data-id="' + escapeHtml(p.id) + '">' +
         statusBadge(p.status) +
         '<div class="img-hover-wrap" data-preview="' + escapeHtml(p.id) + '">' +
           thumbHtml +
@@ -745,7 +790,11 @@
         return;
       }
       var cardEl = e.target.closest('[data-nav="project"]');
-      if (cardEl) navigate('#/project/' + cardEl.getAttribute('data-id'));
+      if (cardEl) navigate('#project=' + cardEl.getAttribute('data-id'));
+    });
+    gridEl.addEventListener('keydown', function (e) {
+      var card = e.target.closest('[data-nav="project"]');
+      if (card && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); navigate('#project=' + card.getAttribute('data-id')); }
     });
   }
 
@@ -814,13 +863,13 @@
     if (countEl) countEl.textContent = String(list.length).padStart(2, '0') + ' project' + (list.length === 1 ? '' : 's');
 
     var workInfo = (window.SITE_INFO && window.SITE_INFO.work) || {};
-    animatePromptAndHeading('#page-work .prompt-block .live', '#page-work .title-block .live',
+    animatePromptAndHeading('#work .prompt-block .live', '#work .title-block .live',
       workInfo.prompt || '> ls work/', workInfo.title || 'All work');
   }
 
   function renderDetail(id) {
     var p = state.projects.find(function (x) { return x.id === id; });
-    if (!p) { showPage('404'); return; }
+    if (!p) { state.activeId = null; document.getElementById('project-details').hidden = true; return false; }
     state.activeId = id;
     state.mediaIndex = 0;
 
@@ -844,14 +893,16 @@
 
     var links = p.links || {};
     var linkEntries = Object.keys(links).map(function (key) {
-      return '<a href="' + escapeHtml(links[key]) + '" target="_blank" rel="noopener">$ open ' + escapeHtml(key) + '</a>';
-    });
+      var url = safeHttpUrl(links[key]);
+      return url ? '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener">$ open ' + escapeHtml(key) + '</a>' : '';
+    }).filter(Boolean);
     document.getElementById('detail-links').innerHTML = linkEntries.length ? linkEntries.join('') : '<span class="detail-meta">no links yet</span>';
 
     renderDetailMedia();
 
     animatePromptAndHeading('#detail-prompt-live', '#detail-title',
       '> cat ' + p.id.toLowerCase() + '/readme', p.name);
+    return true;
   }
 
   function renderDetailMedia() {
@@ -867,16 +918,22 @@
       return;
     }
     var item = media[state.mediaIndex] || media[0];
+    var itemUrl = mediaUrl(p, item.src);
+    if (!itemUrl) {
+      slot.innerHTML = '<div class="card-thumb-empty">media unavailable</div>';
+      counter.style.display = 'none';
+      return;
+    }
     if (item.type === 'video') {
       if (isIframeEmbed(item.src)) {
         // The detail page only ever shows one video at a time, so
         // autoplaying here (unlike the card grid) is cheap and reliable.
-        slot.innerHTML = '<iframe src="' + escapeHtml(withAutoplayParams(item.src)) + '" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="width:100%;height:100%;border:none;"></iframe>';
+        slot.innerHTML = '<iframe src="' + escapeHtml(withAutoplayParams(itemUrl)) + '" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="width:100%;height:100%;border:none;"></iframe>';
       } else {
-        slot.innerHTML = '<video src="' + escapeHtml(mediaUrl(p, item.src)) + '" controls autoplay muted loop playsinline style="width:100%;height:100%;"></video>';
+        slot.innerHTML = '<video src="' + escapeHtml(itemUrl) + '" controls autoplay muted loop playsinline style="width:100%;height:100%;"></video>';
       }
     } else {
-      slot.innerHTML = '<img src="' + escapeHtml(mediaUrl(p, item.src)) + '" alt="' + escapeHtml(item.caption || p.name) + '" style="width:100%;height:100%;object-fit:cover;">';
+      slot.innerHTML = '<img src="' + escapeHtml(itemUrl) + '" alt="' + escapeHtml(item.caption || p.name) + '" style="width:100%;height:100%;object-fit:cover;">';
     }
     if (media.length > 1) {
       counter.style.display = '';
@@ -897,13 +954,13 @@
 
   function renderAbout() {
     var aboutInfo = (window.SITE_INFO && window.SITE_INFO.about) || {};
-    animatePromptAndHeading('#page-about .prompt-block .live', '#page-about .title-block .live',
+    animatePromptAndHeading('#about .prompt-block .live', '#about .title-block .live',
       aboutInfo.prompt || '> cat about.sh', aboutInfo.title || 'Ten years turning ideas into working software.');
   }
 
   function renderContact() {
     var contactInfo = (window.SITE_INFO && window.SITE_INFO.contact) || {};
-    animatePromptAndHeading('#page-contact .prompt-block .live', '#page-contact .title-block .live',
+    animatePromptAndHeading('#contact .prompt-block .live', '#contact .title-block .live',
       contactInfo.prompt || '> ./contact.sh --init', contactInfo.title || "Let's build something.");
   }
 
@@ -913,20 +970,23 @@
     var p = state.projects.find(function (x) { return x.id === id; });
     if (!p) return;
     var media = mediaFor(p).filter(function (m) { return m.type !== 'video'; });
-    if (!media.length) { navigate('#/project/' + id); return; } // video-only preview: no image to zoom, open the project instead
+    if (!media.length) { navigate('#project=' + id); return; } // video-only preview: no image to zoom, open the project instead
     openLightbox(p, media, 0);
   }
 
   var lbState = null;
 
   function openLightbox(p, media, idx) {
-    lbState = { p: p, media: media, idx: idx };
+    var imageUrl = mediaUrl(p, media[idx].src);
+    if (!imageUrl) return;
+    var returnFocus = lbState ? lbState.returnFocus : document.activeElement;
+    lbState = { p: p, media: media, idx: idx, returnFocus: returnFocus };
     var lb = document.getElementById('lightbox');
     var img = document.getElementById('lb-img');
     var caption = document.getElementById('lb-caption');
     var prevBtn = document.getElementById('lb-prev');
     var nextBtn = document.getElementById('lb-next');
-    img.src = mediaUrl(p, media[idx].src);
+    img.src = imageUrl;
     img.alt = media[idx].caption || p.name;
     if (media.length > 1) {
       prevBtn.style.display = '';
@@ -942,6 +1002,7 @@
       caption.style.display = 'none';
     }
     lb.classList.add('open');
+    document.getElementById('lb-close').focus();
   }
 
   function stepLightbox(dir) {
@@ -952,61 +1013,43 @@
 
   function closeLightbox() {
     document.getElementById('lightbox').classList.remove('open');
+    var focusTarget = lbState && lbState.returnFocus;
     lbState = null;
+    if (focusTarget && focusTarget.focus) focusTarget.focus();
   }
 
   /* -------------------- routing -------------------- */
 
-  function showPage(name) {
-    ['home', 'work', 'about', 'detail', 'contact', '404'].forEach(function (n) {
-      var el = document.getElementById('page-' + n);
-      if (el) el.style.display = n === name ? 'block' : 'none';
-    });
-    document.querySelectorAll('.term-tab').forEach(function (tab) {
-      tab.classList.toggle('active', tab.getAttribute('data-page') === (name === 'detail' ? 'work' : name));
-    });
-    window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
-  }
-
   function router() {
-    var hash = window.location.hash || '#/';
-    var m;
-    var name = (window.SITE_INFO && window.SITE_INFO.name) || 'A.Voss';
-    if (hash === '#/' || hash === '' || hash === '#/home') {
-      state.page = 'home';
-      showPage('home');
-      renderHome();
-      document.title = (window.SITE_INFO && window.SITE_INFO.meta && window.SITE_INFO.meta.title) || (name + ' — Portfolio');
-    } else if (hash === '#/work') {
-      state.page = 'work';
-      showPage('work');
-      renderWork();
-      document.title = 'Work — ' + name;
-    } else if (hash === '#/about') {
-      state.page = 'about';
-      showPage('about');
-      renderAbout();
-      document.title = 'About — ' + name;
-    } else if (hash === '#/contact') {
-      state.page = 'contact';
-      showPage('contact');
-      renderContact();
-      document.title = 'Contact — ' + name;
-    } else if ((m = hash.match(/^#\/project\/(.+)$/))) {
-      state.page = 'detail';
-      showPage('detail');
-      renderDetail(decodeURIComponent(m[1]));
-    } else {
-      showPage('404');
-      document.title = 'Not found — ' + name;
+    var hash = window.location.hash || '#home';
+    var projectMatch = hash.match(/^#project=(.*)$/);
+    var projectId = null;
+    if (projectMatch) { try { projectId = decodeURIComponent(projectMatch[1]); } catch (e) { projectMatch = null; } }
+    var target = projectMatch ? 'project-details' : hash.slice(1);
+    if (!['home','work','about','contact','project-details'].includes(target)) target = 'home';
+    document.querySelectorAll('.term-tab').forEach(function (tab) {
+      var active = tab.getAttribute('data-page') === (projectMatch ? 'work' : target);
+      tab.classList.toggle('active', active);
+      if (active) tab.setAttribute('aria-current','location'); else tab.removeAttribute('aria-current');
+    });
+    renderHome(); renderWork(); renderAbout(); renderContact();
+    if (projectMatch && projectId && renderDetail(projectId)) {
+      target = 'project-details';
+    } else if (projectMatch) {
+      projectMatch = null;
+      target = 'work';
     }
+    var detailSection = document.getElementById('project-details');
+    if (detailSection) detailSection.hidden = !projectMatch;
+    var section = document.getElementById(target);
+    if (section) section.scrollIntoView({behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
+    if (target === 'project-details') document.getElementById('detail-title').focus({preventScroll:true});
   }
 
   function navigate(hash) {
-    if (window.location.hash === hash) { router(); return; }
-    window.location.hash = hash;
+    if (hash.charAt(0) !== '#') hash = '#' + hash;
+    if (window.location.hash === hash) router(); else window.location.hash = hash;
   }
-
   /* -------------------- wiring -------------------- */
 
   function wireStaticUI() {
@@ -1016,17 +1059,17 @@
     document.querySelectorAll('.term-tab').forEach(function (tab) {
       tab.addEventListener('click', function () {
         var p = tab.getAttribute('data-page');
-        navigate(p === 'home' ? '#/' : '#/' + p);
+        navigate('#' + p);
       });
     });
     document.querySelectorAll('[data-goto]').forEach(function (el) {
       el.addEventListener('click', function () {
         var p = el.getAttribute('data-goto');
-        navigate(p === 'home' ? '#/' : '#/' + p);
+        navigate('#' + p);
       });
     });
 
-    document.getElementById('logo').addEventListener('click', function () { navigate('#/'); });
+    document.getElementById('logo').addEventListener('click', function () { navigate('#home'); });
 
     document.getElementById('home-grid').addEventListener('click', function () {});
     wireGridDelegation(document.getElementById('home-grid'));
@@ -1060,6 +1103,12 @@
       var lb = document.getElementById('lightbox');
       if (!lb.classList.contains('open')) return;
       if (e.key === 'Escape') closeLightbox();
+      if (e.key === 'Tab') {
+        var controls = Array.prototype.slice.call(lb.querySelectorAll('button:not([style*="display: none"])'));
+        var first = controls[0], last = controls[controls.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
       if (e.key === 'ArrowLeft') stepLightbox(-1);
       if (e.key === 'ArrowRight') stepLightbox(1);
     });
@@ -1071,14 +1120,14 @@
       var email = form.email.value.trim();
       var message = form.message.value.trim();
       var btn = document.getElementById('contact-send');
-      if (!name || !email || !message) {
+      if (!name || !safeEmail(email) || !message) {
         btn.textContent = './send.sh --error: missing fields';
         setTimeout(function () { btn.textContent = './send.sh'; }, 2200);
         return;
       }
       var subject = encodeURIComponent('Portfolio contact from ' + name);
       var body = encodeURIComponent(message + '\n\n— ' + name + ' (' + email + ')');
-      var toAddress = (window.SITE_INFO && window.SITE_INFO.contact && window.SITE_INFO.contact.email) || 'hi@example.dev';
+      var toAddress = safeEmail(window.SITE_INFO && window.SITE_INFO.contact && window.SITE_INFO.contact.email) || 'hi@example.dev';
       window.location.href = 'mailto:' + toAddress + '?subject=' + subject + '&body=' + body;
       btn.textContent = 'sent ✓';
       setTimeout(function () { btn.textContent = './send.sh'; }, 3000);
@@ -1100,20 +1149,110 @@
     });
   }
 
+  /* -------------------- scroll-scrub section commands -------------------- */
+
+  function setupSectionScrub() {
+    var sections = Array.prototype.slice.call(document.querySelectorAll('main .page'));
+    var commands = { home: '$ ./home.sh', work: '$ ls work/', about: '$ ./about.sh',
+      contact: '$ ./contact.sh --init', 'project-details': '$ cat project/readme' };
+    var records = [];
+    var reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+    var frame = 0;
+    sections.forEach(function (section) {
+      var command = commands[section.id];
+      if (!command) return;
+      var shell = document.createElement('div');
+      shell.className = 'scrub-command';
+      shell.setAttribute('aria-hidden', 'true');
+      shell.textContent = command;
+      section.insertBefore(shell, section.firstChild);
+      var accessible = document.createElement('span');
+      accessible.className = 'visually-hidden';
+      accessible.textContent = command;
+      shell.parentNode.insertBefore(accessible, shell.nextSibling);
+      records.push({ section: section, command: command, visual: shell, lastVisual: null, lastReveal: null, top: 0, height: 1 });
+    });
+    function measure() {
+      records.forEach(function (record) {
+        var rect = record.section.getBoundingClientRect();
+        record.top = rect.top + window.pageYOffset;
+        record.height = Math.max(1, rect.height);
+      });
+      schedule();
+    }
+    function render() {
+      frame = 0;
+      if (reduced.matches) {
+        records.forEach(function (record) {
+          if (record.lastVisual !== record.command) {
+            record.visual.textContent = record.command;
+            record.lastVisual = record.command;
+          }
+          if (record.lastReveal !== '1') {
+            record.section.style.setProperty('--scrub-content', '1');
+            record.lastReveal = '1';
+          }
+        });
+        return;
+      }
+      var viewport = window.innerHeight || document.documentElement.clientHeight;
+      var y = window.pageYOffset;
+      records.forEach(function (record) {
+        var start = record.top - viewport * 0.82;
+        var end = record.top + record.height - viewport * 0.18;
+        var progress = Math.max(0, Math.min(1, (y - start) / Math.max(1, end - start)));
+        var typed = Math.min(1, progress / 0.28);
+        var reveal = Math.max(0, Math.min(1, (progress - 0.28) / 0.72));
+        var visibleCommand = record.command.slice(0, Math.ceil(typed * record.command.length));
+        if (record.lastVisual !== visibleCommand) {
+          record.visual.textContent = visibleCommand;
+          record.lastVisual = visibleCommand;
+        }
+        var revealValue = String(reveal);
+        if (record.lastReveal !== revealValue) {
+          record.section.style.setProperty('--scrub-content', revealValue);
+          record.lastReveal = revealValue;
+        }
+      });
+    }
+    function schedule() { if (!frame) frame = window.requestAnimationFrame(render); }
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', measure, { passive: true });
+    if (window.ResizeObserver) {
+      var observer = new ResizeObserver(measure);
+      sections.forEach(function (section) { observer.observe(section); });
+    }
+    if (reduced.addEventListener) reduced.addEventListener('change', schedule);
+    else if (reduced.addListener) reduced.addListener(schedule);
+    measure();
+  }
+
   /* -------------------- boot -------------------- */
 
   document.addEventListener('DOMContentLoaded', function () {
+    setupSectionScrub();
     applyAccent();
     applySiteInfo();
     setupShader();
     wireStaticUI();
+    var revealTargets = document.querySelectorAll('.page > section, .page .grid, .page .about-grid, .page .contact-grid');
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && 'IntersectionObserver' in window) {
+      var revealObserver = new IntersectionObserver(function (entries) { entries.forEach(function (entry) { if (entry.isIntersecting) { entry.target.classList.add('revealed'); revealObserver.unobserve(entry.target); } }); }, { threshold: 0.08 });
+      revealTargets.forEach(function (el) { el.classList.add('reveal-pending'); revealObserver.observe(el); });
+    }
 
     fetchManifest().then(function (manifest) {
-      state.projects = manifest.projects || [];
-      runIntro(function () {
-        document.getElementById('app').style.display = 'block';
-        router();
+      var seenIds = Object.create(null);
+      state.projects = (Array.isArray(manifest.projects) ? manifest.projects : []).filter(function (project) {
+        var id = project && safeProjectId(project.id);
+        if (!id || seenIds[id]) return false;
+        seenIds[id] = true;
+        return true;
       });
+      document.getElementById('intro-overlay').style.display = 'none';
+      document.getElementById('intro-vignette').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      router();
     }).catch(function (err) {
       document.getElementById('intro-overlay').style.display = 'none';
       document.getElementById('intro-vignette').style.display = 'none';

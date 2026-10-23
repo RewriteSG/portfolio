@@ -1,7 +1,7 @@
 ---
 description: Clarifies the request first, then creates a plan and hands work to the next agent
 mode: primary
-model: github-copilot/claude-sonnet-4.6
+model: openai/gpt-6-luna
 temperature: 0.1
 max_steps: 8
 permission:

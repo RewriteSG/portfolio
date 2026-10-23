@@ -10,6 +10,7 @@
 <body class="scan">
 
   <canvas id="bg-canvas"></canvas>
+  <a class="skip-link" href="#main-content">Skip to content</a>
 
   <button type="button" class="term-btn accent-toggle" id="accent-toggle">accent: green</button>
 
@@ -29,16 +30,16 @@
   <div class="intro-vignette" id="intro-vignette"></div>
 
   <!-- ============ main app ============ -->
-  <div id="app" style="display:none;">
+  <div id="app">
 
     <nav class="term-tabs" id="term-tabs">
-      <span class="term-tab" data-page="home"><i class="dot"></i><span id="nav-label-home">home.sh</span></span>
-      <span class="term-tab" data-page="work"><i class="dot"></i><span id="nav-label-work">work.sh</span></span>
-      <span class="term-tab" data-page="about"><i class="dot"></i><span id="nav-label-about">about.sh</span></span>
-      <span class="term-tab" data-page="contact"><i class="dot"></i><span id="nav-label-contact">contact.sh</span></span>
+      <a class="term-tab" href="#home" data-page="home"><i class="dot"></i><span id="nav-label-home">home.sh</span></a>
+      <a class="term-tab" href="#work" data-page="work"><i class="dot"></i><span id="nav-label-work">work.sh</span></a>
+      <a class="term-tab" href="#about" data-page="about"><i class="dot"></i><span id="nav-label-about">about.sh</span></a>
+      <a class="term-tab" href="#contact" data-page="contact"><i class="dot"></i><span id="nav-label-contact">contact.sh</span></a>
     </nav>
 
-    <div class="shell">
+    <main class="shell" id="main-content" tabindex="-1">
       <div class="masthead-bar">
         <span class="logo glow" id="logo">A.VOSS<span class="caret"></span></span>
         <div class="masthead-actions">
@@ -48,7 +49,7 @@
       </div>
 
       <!-- ---------- home ---------- -->
-      <div class="wrap page" id="page-home" style="display:none;">
+      <section class="wrap page" id="home" aria-label="Home">
         <section style="padding:80px 0 24px;">
           <div class="prompt-block">
             <span class="ghost" id="home-prompt-ghost">&gt; whoami</span>
@@ -76,10 +77,10 @@
           <span class="section-label" id="label-selected-work">selected_work/</span>
           <div class="grid" id="home-grid"><div class="state-box">Loading projects…</div></div>
         </section>
-      </div>
+      </section>
 
       <!-- ---------- work ---------- -->
-      <div class="wrap page" id="page-work" style="display:none; padding-bottom:80px;">
+      <section class="wrap page" id="work" aria-label="Work" style="padding-bottom:80px;">
         <section style="padding:56px 0 8px;">
           <div class="prompt-block">
             <span class="ghost" id="work-prompt-ghost">&gt; ls work/</span>
@@ -95,10 +96,10 @@
         <section style="padding:32px 0 60px;">
           <div class="grid" id="work-grid"><div class="state-box">Loading projects…</div></div>
         </section>
-      </div>
+      </section>
 
       <!-- ---------- about ---------- -->
-      <div class="wrap page" id="page-about" style="display:none; padding-bottom:80px;">
+      <section class="wrap page" id="about" aria-label="About" style="padding-bottom:80px;">
         <section style="padding:56px 0 0;">
           <div class="prompt-block">
             <span class="ghost" id="about-prompt-ghost">&gt; cat about.sh</span>
@@ -130,10 +131,10 @@
           <span class="section-label" id="label-timeline">timeline/</span>
           <pre class="ascii-box" id="about-timeline"></pre>
         </section>
-      </div>
+      </section>
 
       <!-- ---------- detail ---------- -->
-      <div class="wrap page" id="page-detail" style="display:none; padding-bottom:80px;">
+      <section class="wrap page" id="project-details" aria-label="Project details" hidden style="padding-bottom:80px;">
         <section style="padding:48px 0 0;">
           <button type="button" class="term-btn small" data-goto="work">&lt; back to work</button>
         </section>
@@ -144,14 +145,14 @@
           </div>
           <div class="title-block" style="margin-top:12px;">
             <h1 class="ghost glow-heading detail" id="detail-title-ghost"></h1>
-            <h1 class="live glow-heading detail" id="detail-title"></h1>
+            <h1 class="live glow-heading detail" id="detail-title" tabindex="-1"></h1>
           </div>
           <div class="detail-badges" id="detail-badges"></div>
         </section>
 
         <section class="detail-grid">
           <div class="detail-media-row">
-            <button type="button" class="term-btn small" id="detail-prev">&lt;</button>
+             <button type="button" class="term-btn small" id="detail-prev" aria-label="Previous project media">&lt;</button>
             <div class="img-hover-wrap" id="detail-media-wrap">
               <div id="detail-media-slot"></div>
               <div class="zoom-icon">
@@ -159,7 +160,7 @@
               </div>
               <span class="media-counter" id="detail-media-counter" style="display:none;"></span>
             </div>
-            <button type="button" class="term-btn small" id="detail-next">&gt;</button>
+             <button type="button" class="term-btn small" id="detail-next" aria-label="Next project media">&gt;</button>
           </div>
           <div class="detail-desc">
             <h2 id="detail-subhead"></h2>
@@ -184,10 +185,10 @@
             <div class="links-list" id="detail-links"></div>
           </div>
         </section>
-      </div>
+      </section>
 
       <!-- ---------- contact ---------- -->
-      <div class="wrap page" id="page-contact" style="display:none; padding-bottom:80px;">
+      <section class="wrap page" id="contact" aria-label="Contact" style="padding-bottom:80px;">
         <section style="padding:56px 0 0;">
           <div class="prompt-block">
             <span class="ghost" id="contact-prompt-ghost">&gt; ./contact.sh --init</span>
@@ -215,7 +216,7 @@
             <div class="status-box" id="contact-status-box"></div>
           </div>
         </section>
-      </div>
+      </section>
 
       <!-- ---------- 404 ---------- -->
       <div class="wrap page" id="page-404" style="display:none; padding-top:100px; padding-bottom:100px; text-align:center;">
@@ -225,7 +226,7 @@
         <button type="button" class="term-btn" data-goto="work">&lt; back to work</button>
       </div>
 
-    </div>
+    </main>
 
     <footer class="site-footer" id="site-footer-text">
       built with vanilla html/css/js · projects.json manifest generated by github actions
@@ -233,13 +234,13 @@
   </div>
 
   <!-- ============ lightbox ============ -->
-  <div class="lightbox-overlay" id="lightbox">
+  <div class="lightbox-overlay" id="lightbox" role="dialog" aria-modal="true" aria-label="Project image viewer" tabindex="-1">
     <button type="button" class="term-btn lightbox-close" id="lb-close">[ x ] close</button>
     <div class="lightbox-inner">
       <div class="lightbox-row">
-        <button type="button" class="term-btn" id="lb-prev" style="font-size:16px;padding:10px 14px;display:none;">&lt;</button>
+        <button type="button" class="term-btn" id="lb-prev" aria-label="Previous image" style="font-size:16px;padding:10px 14px;display:none;">&lt;</button>
         <img id="lb-img" src="" alt="">
-        <button type="button" class="term-btn" id="lb-next" style="font-size:16px;padding:10px 14px;display:none;">&gt;</button>
+        <button type="button" class="term-btn" id="lb-next" aria-label="Next image" style="font-size:16px;padding:10px 14px;display:none;">&gt;</button>
       </div>
       <span class="lightbox-caption" id="lb-caption" style="display:none;"></span>
     </div>
