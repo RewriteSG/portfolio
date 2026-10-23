@@ -206,20 +206,7 @@ export class JourneyScene {
     this.orbitProgress = new THREE.Mesh(arcGeometry, arcMaterial);
     this.solar.add(this.orbitProgress);
     this.solarMaterials.push(arcMaterial);
-    this.projectMarkers = [0x87c3c4, 0xb6a1ea, 0xb8c78b].map((color, index) => {
-      const angle = -Math.PI / 2 + index / 3 * Math.PI * 2;
-      const material = new THREE.MeshStandardMaterial({ color, roughness: .55, metalness: .08, emissive: color, emissiveIntensity: .08, transparent: true });
-      const planet = new THREE.Mesh(new THREE.SphereGeometry(2.5, 64, 40), material);
-      planet.position.set(Math.cos(angle) * 96, 0, Math.sin(angle) * 96);
-      this.solar.add(planet);
-      this.solarMaterials.push(material);
-      const haloMaterial = new THREE.SpriteMaterial({ map: this.glowMap, color, transparent: true, opacity: .2, blending: THREE.AdditiveBlending, depthWrite: false });
-      const halo = new THREE.Sprite(haloMaterial);
-      halo.scale.set(13, 13, 1);
-      planet.add(halo);
-      this.solarMaterials.push(haloMaterial);
-      return { planet, halo };
-    });
+    this.projectMarkers = [];
     this.solarMaterials.forEach(material => { material.userData.baseOpacity = material.opacity; });
   }
 
@@ -261,12 +248,11 @@ export class JourneyScene {
     this.dirty = true;
   }
 
-  setProjectFocus(id) {
-    const next = ['northstar', 'lumen', 'field-notes', 'all'].includes(id) ? id : null;
+  setProjectFocus(index) {
+    const next = Number.isInteger(index) && index >= 0 && index < this.projectMarkers.length ? index : null;
     if (next === this.projectFocus) return;
     this.projectFocus = next;
-    const index = ['northstar', 'lumen', 'field-notes'].indexOf(next);
-    if (index >= 0) this.focusedPlanetIndex = index;
+    if (next !== null) this.focusedPlanetIndex = next;
     this.focusTransition = {
       eye: this.camera.position.clone(),
       look: this.look.clone(),
@@ -278,9 +264,9 @@ export class JourneyScene {
   }
 
   updateProjectFocus(now) {
-    const index = ['northstar', 'lumen', 'field-notes'].indexOf(this.projectFocus);
+    const index = Number.isInteger(this.projectFocus) ? this.projectFocus : -1;
     const targetFocus = index >= 0 ? 1 : 0;
-    const targetIndex = this.projectFocus === 'all' ? 1 : 0;
+    const targetIndex = 0;
     const transition = this.focusTransition;
     let amount = 1;
     if (transition) {
@@ -448,13 +434,11 @@ export class JourneyScene {
     this.solarMaterials.forEach(material => { material.opacity = material.userData.baseOpacity * solarOpacity; });
     this.planets.forEach(planet => { const angle = planet.angle + this.time * planet.speed; planet.mesh.position.set(Math.cos(angle) * planet.radius, 0, Math.sin(angle) * planet.radius); });
     const scroll = this.progress;
-    const projectProgress = scroll < .79 ? clamp((scroll - .59) / .30, 0, 1) : 2 / 3 + clamp((scroll - .79) / .04, 0, 1) / 3;
+    const projectProgress = clamp((scroll - .565) / (.83 - .565), 0, 1);
     this.orbitProgress.geometry.setDrawRange(0, Math.floor(projectProgress * 256) * 6);
-    const selectedProject = scroll < .645 ? 0 : scroll < .745 ? 1 : 2;
-    this.projectMarkers.forEach(({ planet, halo }, index) => {
-      planet.material.emissiveIntensity = index === selectedProject ? .6 : .08;
-      halo.material.opacity = solarOpacity * (index === selectedProject ? .8 : .12);
-      planet.scale.setScalar(index === selectedProject ? 1.2 : 1);
+    this.projectMarkers.forEach(({ planet, halo }) => {
+      planet.material.opacity = solarOpacity;
+      halo.material.opacity = solarOpacity * .2;
     });
     this.city.group.visible = p > .938;
     if (this.city.group.visible) this.city.update(this.time, this.reducedMotion);

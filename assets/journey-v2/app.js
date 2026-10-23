@@ -113,9 +113,10 @@ function updateOrbit(p) {
     link.style.left = `${layout.stops[index].x.toFixed(2)}px`;
     link.style.top = `${layout.stops[index].y.toFixed(2)}px`;
   });
-  const projectIndex = p < .645 ? 0 : p < .745 ? 1 : 2;
+  const projectIndex = Math.min(ringStops.length - 1, Math.floor(clamp((p - .565) / (.817 - .565)) * ringStops.length));
   document.querySelector('#project-number').textContent = String(projectIndex + 1).padStart(2, '0');
-  ring.setAttribute('aria-label', `Solar system project navigation, project ${projectIndex + 1} of 3`);
+  document.querySelector('#project-count').textContent = ` / ${String(ringStops.length).padStart(2, '0')}`;
+  ring.setAttribute('aria-label', `Project navigation, project ${projectIndex + 1} of ${ringStops.length}`);
   ringStops.forEach((link, index) => {
     if (index === projectIndex) link.setAttribute('aria-current', 'true');
     else link.removeAttribute('aria-current');

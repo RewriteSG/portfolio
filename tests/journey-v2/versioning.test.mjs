@@ -7,13 +7,17 @@ import { fileURLToPath } from 'node:url';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const fixture = JSON.parse(readFileSync(path.join(projectRoot, 'tests/journey-v2/fixtures/journey-reference-hashes.json'), 'utf8'));
-const referenceRoot = process.env.JOURNEY_REFERENCE_ROOT || 'D:/Github/GitHub/Github/portfolio';
+const referenceRoot = path.resolve(process.env.JOURNEY_REFERENCE_ROOT || projectRoot);
 const referenceFiles = Object.keys(fixture).sort();
 const sha256 = file => createHash('sha256').update(readFileSync(file)).digest('hex');
 const read = file => readFileSync(path.join(projectRoot, file), 'utf8');
 
 test('reference fixture covers every immutable Journey and shared source file', () => {
   const journeyRoot = path.join(referenceRoot, 'overwrite-design/dist/journey');
+  assert.ok(
+    existsSync(journeyRoot),
+    `Journey reference files are unavailable under ${referenceRoot}; set JOURNEY_REFERENCE_ROOT to the repository containing overwrite-design/dist.`
+  );
   const sourceFiles = readdirSync(journeyRoot)
     .map(name => `overwrite-design/dist/journey/${name}`)
     .filter(file => statSync(path.join(referenceRoot, file)).isFile());
@@ -58,6 +62,10 @@ test('Journey V2 includes all required copied assets', () => {
 
 test('module imports and CSS URLs resolve within the Journey V2 production boundary', () => {
   const assetsRoot = path.join(projectRoot, 'assets/journey-v2');
+  const isWithin = (root, target) => {
+    const relative = path.relative(root, target);
+    return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+  };
   const moduleFiles = ['app.js', 'scene.js', 'earth.js', 'city.js'];
   for (const file of moduleFiles) {
     const source = read(`assets/journey-v2/${file}`);
@@ -65,16 +73,27 @@ test('module imports and CSS URLs resolve within the Journey V2 production bound
     for (const match of imports) {
       const value = match[1] || match[2];
       assert.ok(!value.startsWith('/') && !/^[a-z]+:/i.test(value), `${file} has a non-local import: ${value}`);
-      assert.ok(existsSync(path.resolve(path.dirname(path.join(assetsRoot, file)), value)), `${file} import does not resolve: ${value}`);
+      const resolved = path.resolve(path.dirname(path.join(assetsRoot, file)), value);
+      assert.ok(isWithin(assetsRoot, resolved), `${file} import escapes Journey V2: ${value}`);
+      assert.ok(existsSync(resolved), `${file} import does not resolve: ${value}`);
     }
   }
 
   const css = `${read('assets/journey-v2/styles.css')}\n${read('assets/journey-v2/project-pages.css')}`;
   for (const [, value] of css.matchAll(/url\(\s*['"]?([^)'"\s]+)['"]?\s*\)/g)) {
-    if (/^(?:data:|https?:|#)/i.test(value)) continue;
-    assert.ok(!value.startsWith('/'), `CSS URL must be relative: ${value}`);
-    assert.ok(existsSync(path.resolve(assetsRoot, value)), `CSS URL does not resolve inside Journey V2: ${value}`);
+    if (/^(?:data:|#)/i.test(value)) continue;
+    assert.ok(!/^(?:[a-z]+:|\/\/)/i.test(value), `CSS runtime dependency must be local: ${value}`);
+    const resolved = path.resolve(assetsRoot, value);
+    assert.ok(isWithin(assetsRoot, resolved), `CSS URL escapes Journey V2: ${value}`);
+    assert.ok(existsSync(resolved), `CSS URL does not resolve inside Journey V2: ${value}`);
   }
+});
+
+test('production scene contains no prototype project identities or fixed project count', () => {
+  const app = read('assets/journey-v2/app.js');
+  const scene = read('assets/journey-v2/scene.js');
+  assert.doesNotMatch(`${app}\n${scene}`, /northstar|lumen|field-notes|of 3/i);
+  assert.doesNotMatch(scene, /index\s*\/\s*3|\[0x87c3c4,\s*0xb6a1ea,\s*0xb8c78b\]/i);
 });
 
 test('static Journey shell has identity, About, Contact, mounts, and no prototype project studies', () => {

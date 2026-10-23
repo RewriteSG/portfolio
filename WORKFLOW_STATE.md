@@ -241,3 +241,9 @@
 - GREEN: `node --test tests/journey-v2/versioning.test.mjs` — 5 passed, 0 failed. Four `node --check` module syntax checks and `git diff --check` also passed. Reference hash equality is covered by the focused test.
 - Context7 and Serena tools were unavailable in this session; the copied modules use existing local vanilla browser APIs and Three.js.
 - Next: reviewer / subsequent implementation tasks can consume `#project-mount`, `#orbit-stops`, and `#project-detail`; project content and detail behavior are intentionally pending.
+
+## Implementor Fix Round 1 — Journey V2 Task 1 (2026-10-24)
+- Removed fixed three-marker/sample-identity behavior from `assets/journey-v2/scene.js`; project focus now takes a numeric marker index, with no markers until dynamic integration. Orbit count/announcement in `app.js` derives from mounted stops.
+- `tests/journey-v2/versioning.test.mjs` now defaults source-hash checks to the current repo, gives an actionable `JOURNEY_REFERENCE_ROOT` error when references are absent, validates containment, and rejects remote CSS dependencies.
+- Configured focused test: 6 passed, 0 failed. App and scene syntax checks passed. Default test reports the expected missing-reference instruction in this managed worktree.
+- Details and exact output: `.superpowers/sdd/2026-10-24-journey-v2-root/task-1-report.md`, Fix Round 1.

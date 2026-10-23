@@ -32,6 +32,7 @@ GREEN — final focused test output:
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
+ℹ duration_ms 104.8142
 ```
 
 ## Exact Checks
@@ -66,3 +67,67 @@ GREEN — final focused test output:
 - Project rendering, orbit stops, and project-detail behavior are intentionally not active in this shell. The empty `#project-mount`, `#orbit-stops`, and `#project-detail` mounts are reserved for the following dynamic-project implementation task.
 - No browser runtime check was requested or run; the focused boundary test and module syntax checks pass.
 - Context7 and Serena MCP tools were not available in the session.
+
+## Fix Round 1
+
+### Files Changed
+
+- `assets/journey-v2/scene.js` — removed the three hard-coded project markers and sample project identities. Project focus now accepts numeric marker indexes, and the progress arc uses the project chapter's timeline span.
+- `assets/journey-v2/app.js` — changed the orbit announcement and count to derive from mounted project stops instead of a fixed count of three.
+- `tests/journey-v2/versioning.test.mjs` — defaults reference lookup to the current repository, documents the `JOURNEY_REFERENCE_ROOT` override in its error, and checks import/CSS path containment while rejecting remote runtime dependencies. Added a regression test for prototype names and fixed project counts.
+- `WORKFLOW_STATE.md` — appended the fix-round handoff.
+- `.superpowers/sdd/2026-10-24-journey-v2-root/task-1-report.md` — appended this fix-round report.
+
+### Commands and Exact Output
+
+Configured reference verification:
+
+```powershell
+$env:JOURNEY_REFERENCE_ROOT = 'D:\Github\GitHub\Github\portfolio'; node --test tests/journey-v2/versioning.test.mjs
+```
+
+```text
+✔ reference fixture covers every immutable Journey and shared source file
+✔ root HTML loads only the Journey V2 production shell in the required order
+✔ Journey V2 includes all required copied assets
+✔ module imports and CSS URLs resolve within the Journey V2 production boundary
+✔ production scene contains no prototype project identities or fixed project count
+✔ static Journey shell has identity, About, Contact, mounts, and no prototype project studies
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+```
+
+Portable-default error-path check:
+
+```powershell
+node --test tests/journey-v2/versioning.test.mjs
+```
+
+```text
+ℹ tests 6
+ℹ pass 5
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Journey reference files are unavailable under C:\Users\Hazwan\.codex\worktrees\journey-v2\portfolio; set JOURNEY_REFERENCE_ROOT to the repository containing overwrite-design/dist.
+```
+
+This is expected in the managed worktree because the immutable reference directory is not copied into it. Setting the documented override verifies that the fixture matches the external reference.
+
+Syntax checks:
+
+```powershell
+node --check assets/journey-v2/app.js
+node --check assets/journey-v2/scene.js
+```
+
+Both exited 0 with no output.
+
+### Review Notes
+
+- `app.js` and `scene.js` contain no Northstar/Lumen/Field Notes identities or fixed “of 3” navigation count; the scene creates no fixed project markers before dynamic integration.
+- Local import and CSS URL targets are resolved and checked to remain within `assets/journey-v2/`. HTTP(S), protocol-relative, and other scheme CSS URLs fail the boundary test; data and fragment URLs are allowed.
+- The reference hash test uses the current repository by default and requires `JOURNEY_REFERENCE_ROOT` only when that checkout lacks `overwrite-design/dist/`.
