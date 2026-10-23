@@ -99,6 +99,7 @@ test('resolves local media under the encoded project directory and rejects unsaf
   assert.equal(resolveProjectMedia({ id: 'project_one' }, './folder/a+b.png', baseUrl), './projects/project_one/folder/a%2Bb.png');
   assert.equal(resolveProjectMedia(project, 'https://cdn.example/video.mp4', baseUrl), 'https://cdn.example/video.mp4');
   assert.equal(resolveProjectMedia(project, '//cdn.example/image.png', baseUrl), 'https://cdn.example/image.png');
+  assert.equal(resolveProjectMedia(project, String.fromCharCode(0xd800), baseUrl), null);
 
   for (const value of [
     '../secret.png', './nested/../../secret.png', '/absolute.png', 'C:\\absolute.png',

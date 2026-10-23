@@ -165,7 +165,11 @@ export function resolveProjectMedia(project, src, baseUrl = DEFAULT_BASE_URL) {
   for (const segment of segments) {
     const decoded = decodePathSegment(segment);
     if (decoded === null || decoded === '.' || decoded === '..' || decoded.includes('/') || decoded.includes('\\')) return null;
-    encodedSegments.push(encodeURIComponent(decoded));
+    try {
+      encodedSegments.push(encodeURIComponent(decoded));
+    } catch {
+      return null;
+    }
   }
   return `./projects/${encodeURIComponent(id)}/${encodedSegments.join('/')}`;
 }
