@@ -26,6 +26,7 @@ let scrollFrame = 0;
 let needsMeasure = false;
 let preserveOnMeasure = false;
 let isReading = false;
+let requestedReading = false;
 let failed = false;
 let pendingFocus;
 let lastSceneLabel = '';
@@ -33,6 +34,7 @@ let lastActive = '';
 let projectPages;
 let focusedProjectId = null;
 let restoredProjectHash = null;
+let restoringFocusPanel = null;
 let projectPresentation = buildProjectPresentation([]);
 
 function textElement(tag, className, text) {
@@ -100,6 +102,7 @@ function bindSiteInfo(info = {}) {
     link.rel = 'noopener noreferrer';
     socials.append(link);
   });
+  document.querySelector('.contact-socials')?.remove();
   emailLink.after(socials);
   if (typeof info.footer === 'string') document.querySelector('.contact-copy').append(textElement('p', 'footer-credit', info.footer));
 }
@@ -145,8 +148,8 @@ async function loadProjects() {
     projectIds.splice(1, projectIds.length, ...projectPresentation.chapters.map(item => item.targetId));
     projectPresentation.chapters.forEach(item => { anchors[item.targetId] = item.progress; });
     anchors.projects = projects.length ? .55 : .59;
-    projectSection.dataset.end = projects.length ? '.577' : '.83';
-    projectSection.dataset.start = projects.length ? '.49' : '.565';
+    projectSection.dataset.end = projects.length ? '.565' : '.83';
+    projectSection.dataset.start = projects.length ? '.535' : '.565';
     panels = [...document.querySelectorAll('.scene-panel')];
     ringStops = [...document.querySelectorAll('.orbit-stop')];
     body.classList.toggle('has-many-projects', projects.length > 32);
@@ -158,9 +161,18 @@ async function loadProjects() {
         scene?.setProjectFocus(item.id);
         document.dispatchEvent(new CustomEvent('journey:project-open', {detail:item}));
       },
-      onClose:({direct}) => {
+      onClose:({direct, restore}) => {
         focusedProjectId = null;
         scene?.setProjectFocus(null);
+        // A modal temporarily moves focus away from its invoking chapter.
+        // Re-enable that chapter before the controller restores keyboard focus.
+        restoringFocusPanel = restore?.focus?.closest('.scene-panel') || null;
+        if (restoringFocusPanel) {
+          restoringFocusPanel.inert = false;
+          restoringFocusPanel.classList.add('is-active');
+          restoringFocusPanel.style.opacity = '1';
+          restoringFocusPanel.setAttribute('aria-hidden', 'false');
+        }
         // popstate precedes hashchange: preserve the controller's exact scroll restore.
         restoredProjectHash = location.hash;
         if (direct) goTo('projects', {instant:true, updateHash:false});
@@ -183,13 +195,15 @@ const smooth = t => { t = clamp(t); return t * t * (3 - 2 * t); };
 const prefersReducedMotion = () => motionPreference.matches;
 
 function setMenu(open) {
+  const restoreFocus = !open && menu.contains(document.activeElement);
   menu.hidden = !open;
   menuButton.setAttribute('aria-expanded', String(open));
   menuButton.setAttribute('aria-label', open ? 'Close options' : 'More options');
+  if (restoreFocus) menuButton.focus({preventScroll:true});
 }
 
 function measure(preservePosition = false) {
-  const progress = progressAtScroll(scrollMetrics, scrollY);
+  const progress = preservePosition && scene ? scene.targetProgress : progressAtScroll(scrollMetrics, scrollY);
   const contentHeight = panels.reduce((height, panel) => panel.dataset.projectId ? Math.max(height, panel.scrollHeight) : height, 0);
   scrollMetrics = buildScrollMetrics(projectLayout, innerHeight, contentHeight);
   track.style.height = `${scrollMetrics.total + innerHeight}px`;
@@ -206,7 +220,7 @@ function measure(preservePosition = false) {
 function scheduleScrollUpdate({measure:refresh = false, preserve = false} = {}) {
   needsMeasure ||= refresh;
   preserveOnMeasure ||= preserve;
-  if (scrollFrame) return;
+  if (scrollFrame || document.hidden) return;
   scrollFrame = requestAnimationFrame(() => {
     scrollFrame = 0;
     if (needsMeasure) {
@@ -255,7 +269,7 @@ document.addEventListener('journey:projects-ready', event => {
   sizeProjectPreviews();
   const requested = location.hash.slice(1);
   if (event.detail.presentation.chapters.some(item => item.targetId === requested)) {
-    goTo(requested, {instant:true, updateHash:false});
+    goTo(requested, {instant:true, updateHash:false, focus:true});
   }
 });
 
@@ -284,7 +298,7 @@ function makeReadable({error = false} = {}) {
   body.classList.toggle('is-reading', !error);
   panels.forEach(panel => {
     panel.inert = false;
-    panel.removeAttribute('aria-hidden');
+    panel.setAttribute('aria-hidden', 'false');
     panel.style.removeProperty('opacity');
     panel.style.removeProperty('transform');
     panel.classList.remove('is-active');
@@ -293,13 +307,15 @@ function makeReadable({error = false} = {}) {
   ring.hidden = true;
   ring.inert = true;
   isReading = !error;
+  scene?.setPaused(true);
   if (error) {
     failed = true;
     document.querySelector('#render-note').hidden = false;
     scene?.dispose?.();
     readingButton.hidden = true;
   } else {
-    readingButton.textContent = 'Return to the visual journey';
+    readingButton.textContent = prefersReducedMotion() ? 'Reduced motion: reading as a page' : 'Return to the visual journey';
+    readingButton.disabled = prefersReducedMotion();
   }
   requestAnimationFrame(() => {
     document.getElementById(id)?.scrollIntoView({behavior:'instant', block:'start'});
@@ -312,24 +328,25 @@ function handleError(error) {
   makeReadable({error:true});
   requestAnimationFrame(() => {
     const requested = location.hash.slice(1);
-    if (requested in anchors) goTo(requested, { instant: true, updateHash: false });
+    if (requested in anchors) goTo(requested, { instant: true, updateHash: false, focus:true });
   });
 }
 
 function updateOrbit(p) {
   const opacity = smooth((p - .478) / .035) * (1 - smooth((p - .817) / .025));
-  if (!scene || !ringStops.length || opacity < .005 || isReading || failed) { ring.hidden = true; return; }
+  const focused = ring.contains(document.activeElement);
+  if (!scene || !ringStops.length || (!focused && opacity < .005) || isReading || failed) { ring.hidden = true; return; }
   const layout = scene.getOrbitLayout();
   ring.hidden = false;
-  ring.style.opacity = opacity.toFixed(4);
-  const interactive = p >= .565 && opacity > .7;
+  ring.style.opacity = focused ? '1' : opacity.toFixed(4);
+  const interactive = focused || (p >= .565 && opacity > .7);
   ring.inert = !interactive;
   ring.setAttribute('aria-hidden', String(!interactive));
   const label = ring.querySelector('.orbit-label');
   label.style.left = `${layout.label.x.toFixed(2)}px`;
   label.style.top = `${layout.label.y.toFixed(2)}px`;
   label.style.opacity = String(smooth((p - .54) / .03));
-  const useList = ringStops.length > 32 || layout.stops.length < ringStops.length;
+  const useList = ringStops.length > 32 || layout.stops.length < ringStops.length || (innerWidth <= 760 && ringStops.length > 3);
   const stops = ring.querySelector('#orbit-stops');
   // Orbital positions are viewport coordinates; only the condensed list belongs
   // inside the transformed label. Otherwise its offset displaces every control.
@@ -372,10 +389,11 @@ function updatePresentation(progress) {
     const opacity = entry * exit;
     const visible = opacity > .006;
     panel.classList.toggle('is-active', visible);
-    panel.style.opacity = opacity.toFixed(4);
-    panel.style.transform = prefersReducedMotion() ? 'none' : `translateY(${((1 - opacity) * (p < start + fade ? 10 : -8)).toFixed(2)}px)`;
-    panel.inert = opacity < .35;
-    panel.setAttribute('aria-hidden', String(opacity < .35 || !panel.id));
+    const focused = panel.contains(document.activeElement) || panel === restoringFocusPanel;
+    panel.style.opacity = focused ? '1' : opacity.toFixed(4);
+    panel.style.transform = focused || prefersReducedMotion() ? 'none' : `translateY(${((1 - opacity) * (p < start + fade ? 10 : -8)).toFixed(2)}px)`;
+    panel.inert = !focused && opacity < .35;
+    panel.setAttribute('aria-hidden', String((!focused && opacity < .35) || !panel.id));
     if (panel.id && opacity > highestOpacity) { active = panel.id; highestOpacity = opacity; }
   });
 
@@ -437,20 +455,47 @@ document.addEventListener('keydown', event => {
 });
 readingButton.addEventListener('click', () => {
   setMenu(false);
-  if (!isReading) { makeReadable(); return; }
+  if (!isReading) { requestedReading = true; makeReadable(); return; }
+  requestedReading = false;
+  enableJourney();
+});
+function enableJourney() {
+  if (failed || prefersReducedMotion()) return;
   isReading = false;
   body.classList.remove('is-reading');
   body.classList.add('has-journey');
   readingButton.textContent = 'Read as a page';
+  readingButton.disabled = false;
+  scene?.setPaused(false);
   measure();
   goTo(location.hash.slice(1) in anchors ? location.hash.slice(1) : lastActive || 'hello', {instant:true, updateHash:false});
+}
+motionPreference.addEventListener('change', () => {
+  scene?.setReducedMotion(prefersReducedMotion());
+  if (failed) return;
+  if (prefersReducedMotion()) makeReadable();
+  else if (!requestedReading) enableJourney();
+  else { readingButton.disabled = false; readingButton.textContent = 'Return to the visual journey'; }
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { cancelAnimationFrame(scrollFrame); scrollFrame = 0; }
+  else scheduleScrollUpdate({measure:true});
+});
+document.addEventListener('focusin', event => {
+  if (restoringFocusPanel?.contains(document.activeElement)) restoringFocusPanel = null;
+  if (ring.classList.contains('is-list') && event.target.closest('.orbit-stop')) {
+    event.target.scrollIntoView({behavior:'instant', block:'nearest', inline:'nearest'});
+  }
+  if (!body.classList.contains('has-journey')) return;
+  previousProgress = -1;
+  updatePresentation(scene?.progress ?? progressAtScroll(scrollMetrics, scrollY));
 });
 addEventListener('scroll', () => scheduleScrollUpdate(), {passive:true});
 addEventListener('resize', () => scheduleScrollUpdate({measure:true, preserve:true}), {passive:true});
 addEventListener('hashchange', () => {
   const restored = restoredProjectHash === location.hash;
   restoredProjectHash = null;
-  if (!restored) goTo(location.hash.slice(1), {updateHash:false});
+  if (!restored) goTo(location.hash.slice(1), {updateHash:false, focus:true});
 });
 addEventListener('pagehide', event => {
   if (event.persisted) return;
@@ -460,8 +505,8 @@ addEventListener('pagehide', event => {
 });
 
 loadProjects();
-body.classList.add('has-journey');
-updatePresentation(0);
+if (prefersReducedMotion()) makeReadable();
+else { body.classList.add('has-journey'); updatePresentation(0); }
 measure();
 import('./scene.js').then(({JourneyScene}) => {
   try {
@@ -473,12 +518,15 @@ import('./scene.js').then(({JourneyScene}) => {
     });
     if (failed) { scene.dispose?.(); return; }
     window.__journeyScene = scene;
+    scene.setPaused(isReading);
     scene.setProjectFocus(focusedProjectId);
     measure();
     const requested = location.hash.slice(1);
-    if (requested in anchors) { goTo(requested, {instant:true, updateHash:false}); scene.setProgress(anchors[requested], true); }
+    if (requested in anchors) { goTo(requested, {instant:true, updateHash:false, focus:true}); scene.setProgress(anchors[requested], true); }
     else { scrollTo({top:0, behavior:'instant'}); scene.setProgress(0); }
     scene.frame(performance.now());
-    document.fonts.ready.then(() => { measure(); sizeProjectPreviews(); });
+    // Intrinsic font-driven size changes already invalidate the observed copy.
+    // Avoid a second unconditional measurement resetting an explicit scene jump.
+    document.fonts.ready.then(sizeProjectPreviews);
   } catch (error) { handleError(error); }
 }).catch(handleError);

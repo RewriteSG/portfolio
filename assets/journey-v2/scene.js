@@ -105,7 +105,12 @@ export class JourneyScene {
     this.resize = this.resize.bind(this);
     this.resize();
     addEventListener('resize', this.resize, { passive: true });
-    this.visibilityHandler = () => { this.previousTime = 0; this.dirty = true; };
+    this.animationFrame = time => this.frame(time);
+    this.visibilityHandler = () => {
+      this.previousTime = 0;
+      this.dirty = true;
+      this.syncAnimationLoop();
+    };
     document.addEventListener('visibilitychange', this.visibilityHandler);
     this.contextLostHandler = event => {
       event.preventDefault();
@@ -113,7 +118,7 @@ export class JourneyScene {
       onError(new Error('The 3D context was interrupted.'));
     };
     this.renderer.domElement.addEventListener('webglcontextlost', this.contextLostHandler);
-    this.renderer.setAnimationLoop(time => this.frame(time));
+    this.syncAnimationLoop();
   }
 
   makeStars() {
@@ -311,6 +316,21 @@ export class JourneyScene {
     this.paused = Boolean(paused);
     this.previousTime = 0;
     this.dirty = true;
+    this.syncAnimationLoop();
+  }
+
+  setReducedMotion(reduced) {
+    this.reducedMotion = Boolean(reduced);
+    this.progress = this.targetProgress;
+    this.previousTime = 0;
+    this.dirty = true;
+    this.frame(performance.now());
+    this.syncAnimationLoop();
+  }
+
+  syncAnimationLoop() {
+    this.animationRunning = !this.disposed && !this.paused && !this.reducedMotion && !document.hidden;
+    this.renderer.setAnimationLoop(this.animationRunning ? this.animationFrame : null);
   }
 
   setProjectFocus(idOrNull) {
@@ -531,6 +551,9 @@ export class JourneyScene {
     return {
       progress: this.progress,
       targetProgress: this.targetProgress,
+      reducedMotion: this.reducedMotion,
+      paused: this.paused,
+      animationRunning: this.animationRunning,
       phase: this.container.dataset.world,
       camera: this.camera.position.toArray(),
       projectFocus: this.projectFocus,
@@ -551,6 +574,7 @@ export class JourneyScene {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    this.animationRunning = false;
     this.renderer.setAnimationLoop(null);
     removeEventListener('resize', this.resize);
     document.removeEventListener('visibilitychange', this.visibilityHandler);

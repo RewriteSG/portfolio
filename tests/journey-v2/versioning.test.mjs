@@ -109,3 +109,15 @@ test('static Journey shell has identity, About, Contact, mounts, and no prototyp
   assert.match(html, /project[^<]{0,100}(?:JavaScript|javascript|script)[^<]{0,100}(?:enabled|enable|requires)/i);
   assert.doesNotMatch(html, /Northstar|Lumen|Field Notes/i);
 });
+
+test('static fallback contains current identity, biography, contact, and skip navigation', () => {
+  const html = read('index.html');
+  assert.match(html, /class="skip-link" href="#about"/);
+  assert.match(html, /Programmer, building across games, software, apps &amp; the web\./);
+  assert.match(html, /Ten years turning ideas into working software\./);
+  assert.match(html, /game engines, backend services, native apps/);
+  assert.match(html, /href="mailto:hi@example\.dev"/);
+  assert.match(html, /href="https:\/\/github\.com\/RewriteSG"/);
+  assert.match(html, /<noscript>[\s\S]*?Projects are unavailable without JavaScript\.[\s\S]*?<\/noscript>/);
+  assert.doesNotMatch(html, /hello@hazwan\.design|product designer/);
+});

@@ -113,3 +113,39 @@
   .contact-panel h2{font-size:clamp(50px,18vw,82px)}
 }
 @media(max-height:500px){.has-journey .project-index{left:53%;top:90px}.orbit-control.is-list .orbit-label{left:var(--gutter)!important;top:auto!important;bottom:80px;width:40vw}.project-real-preview{min-height:100px}}
+
+/* Keep keyboard targets readable throughout scene changes and in the static page. */
+.has-journey .scene-panel:focus-within{opacity:1!important;visibility:visible;transform:none!important}
+.orbit-control:focus-within,.orbit-control:focus-within .orbit-label{opacity:1!important}
+.is-projects .scroll-cue:focus{visibility:visible}
+.main-nav>a,.wordmark,.contact-email,.back-to-start,.scroll-cue,.more-menu button{min-height:44px;display:inline-flex;align-items:center}
+.main-nav>a{min-width:44px;justify-content:center}.more-menu button{width:100%}
+.scene-panel{outline-offset:-2px}.scene-panel :focus-visible{outline-offset:2px}
+.projects-no-script{max-width:700px;padding:24px var(--gutter);margin:auto;position:relative;z-index:2}
+.project-jump-list{max-height:40vh;overflow:auto;padding:4px;scroll-padding:8px}
+.project-jump-list a{min-width:44px}
+.contact-socials a{overflow-wrap:anywhere;min-width:0}
+.is-reading .project-panel,.is-fallback .project-panel{width:100%;min-width:0}
+.is-reading .project-copy,.is-fallback .project-copy{min-width:0}
+.is-reading .scene-panel,.is-fallback .scene-panel{scroll-margin-top:100px}
+.orbit-control.is-list .orbit-stops{scroll-padding:8px}
+.orbit-control.is-list .orbit-stop:focus-visible{outline-offset:2px}
+.is-contact{--muted:#3d594f}
+.is-contact .contact-copy{position:relative;isolation:isolate}
+.is-contact .contact-copy:before{content:'';position:absolute;z-index:-1;inset:-12px;background:linear-gradient(90deg,rgba(188,207,207,.98),rgba(188,207,207,.94) 85%,rgba(188,207,207,.88));filter:blur(12px);pointer-events:none}
+.is-contact .journey-footer,.is-contact .footer-place,.is-contact .scene-label,.is-contact .scroll-cue,.is-contact .contact-signoff,.is-contact .back-to-start,.is-contact .city-annotation{color:#3d594f}
+@media(max-width:760px){
+  .main-nav{gap:4px}.menu-toggle{margin-left:0}.masthead{gap:10px}
+  .wordmark{flex:none}.wordmark svg{width:18px}.main-nav{font-size:10px}
+  .orbit-control.is-list .orbit-label{top:25vh!important;gap:8px}
+  .orbit-control.is-list .orbit-stops{width:100%}
+  .has-journey .project-real-preview{flex-shrink:0}
+  .has-journey .project-panel .project-copy{flex-shrink:0}
+  .has-journey .hello-footnote{gap:20px}.hello-footnote p{max-width:55%}
+}
+@media(max-height:500px){
+  .more-menu{top:64px}.has-journey .scene-panel{scroll-padding:8px}
+  .has-journey .hello-footnote{display:none}
+  .orbit-control.is-list .orbit-label{top:100px!important;bottom:auto;max-height:calc(100svh - 160px)}
+  .orbit-control.is-list .orbit-stops{max-height:150px}
+}

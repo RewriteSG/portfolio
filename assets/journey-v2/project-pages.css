@@ -99,3 +99,9 @@
 .study-links{display:flex;flex-wrap:wrap;gap:15px 30px;margin:30px 0}.study-text-button{overflow-wrap:anywhere}.study-next{margin-top:40px}
 .is-contact .project-pages{--muted:#b7c9cd;--line:rgba(223,239,235,.25)}.is-contact .project-pages :focus-visible{outline-color:#bdf3f1}
 @media(max-width:760px){.study-page{padding:0 var(--gutter) 40px}.study-intro>.project-metadata{margin-top:22px}.study-gallery{gap:28px}.study-long-copy{font-size:13px}.study-next{align-items:flex-start}.study-next .study-text-button{font-size:12px;white-space:normal}}
+
+.study-text-button{min-height:44px;min-width:44px;display:inline-flex;align-items:center}
+.study-page-header{min-height:80px}.study-page-content{padding-top:12px}
+.project-pages{scroll-padding-top:100px}.study-page-content h1:focus{outline-offset:2px}
+.study-page-content :focus-visible{outline-offset:2px}
+@media(max-width:500px){.study-next{align-items:stretch}.study-next>a{align-self:stretch}.study-close{padding-left:8px}.study-page-header{gap:8px}}
