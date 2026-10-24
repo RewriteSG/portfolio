@@ -33,6 +33,33 @@ async function assertGate(page, busy = 'true', sceneRequests = 0) {
   return state;
 }
 
+async function assertStartupFocus(page, targetId) {
+  const state = await page.evaluate(targetId => {
+    const gate = document.querySelector('#journey-startup-gate');
+    const shell = document.querySelector('.journey-shell');
+    const target = document.getElementById(targetId);
+    const rect = target?.getBoundingClientRect();
+    const style = target && getComputedStyle(target);
+    return {
+      activeId:document.activeElement?.id,
+      gateFocused:document.activeElement === gate,
+      gateVisible:gate.checkVisibility(),
+      pending:document.body.classList.contains('preflight-pending'),
+      shellVisibility:getComputedStyle(shell).visibility,
+      targetVisible:Boolean(target && target.checkVisibility() && rect.width && rect.height
+        && rect.top < innerHeight && rect.bottom > 0 && style.visibility === 'visible' && Number(style.opacity) > .5),
+      targetInert:target?.inert,
+    };
+  }, targetId);
+  assert.equal(state.activeId, targetId, `startup focus should move to #${targetId}`);
+  assert.equal(state.gateFocused, false, 'focus must not remain on the startup gate');
+  assert.equal(state.gateVisible, false, 'the startup gate must be closed after successful startup');
+  assert.equal(state.pending, false, 'the Journey shell must be released after startup');
+  assert.equal(state.shellVisibility, 'visible', 'the focus destination must be in the visible Journey');
+  assert.equal(state.targetVisible, true, `#${targetId} must be visible when it receives focus`);
+  assert.equal(state.targetInert, false, `#${targetId} must not be inert when it receives focus`);
+}
+
 try {
   const delayedPage = await browser.newPage({viewport:{width:1280, height:900}});
   try {
@@ -69,7 +96,8 @@ try {
     await delayedPage.waitForFunction(() => window.__journeyScene && window.__journeyProjects && !document.body.classList.contains('preflight-pending'));
     assert.equal(await delayedPage.locator('#journey-startup-gate').isVisible(), false, 'the gate should leave after both resources validate');
     assert.ok(await delayedPage.locator('#orbit-stops .orbit-stop').count() > 0, 'valid preflight should initialize project controls');
-    console.log('PASS startup gate waits for settings and manifest before revealing controls or creating the scene');
+    await assertStartupFocus(delayedPage, 'hello');
+    console.log('PASS no-hash startup waits for preflight, reveals the scene, and focuses the visible Hello section');
   } finally {
     await delayedPage.close();
   }
@@ -90,6 +118,18 @@ try {
     console.log('PASS invalid settings remain blocking and report the setting path, value, range, and reload instruction');
   } finally {
     await invalidPage.close();
+  }
+
+  const directHashPage = await browser.newPage({viewport:{width:1280, height:900}});
+  try {
+    await directHashPage.route('**/assets/journey-v2/settings.json', route => route.fulfill({json:{orbitCount:1}}));
+    await directHashPage.route('**/projects.json', route => route.fulfill({json:manifest}));
+    await directHashPage.goto(`${base}#projects`, {waitUntil:'domcontentloaded'});
+    await directHashPage.waitForFunction(() => window.__journeyScene && window.__journeyProjects && !document.body.classList.contains('preflight-pending'));
+    await assertStartupFocus(directHashPage, 'projects');
+    console.log('PASS direct-hash startup focuses the visible Projects target after scene setup');
+  } finally {
+    await directHashPage.close();
   }
 
   const retryPage = await browser.newPage({viewport:{width:1280, height:900}});
@@ -113,9 +153,43 @@ try {
     await retryPage.waitForFunction(() => window.__journeyScene && window.__journeyProjects && !document.body.classList.contains('preflight-pending'));
     assert.ok(settingsRequests >= 2, 'retry should fetch settings again');
     assert.ok(manifestRequests >= 2, 'retry should reload the manifest as part of complete preflight');
-    console.log('PASS fetch failure keeps the gate and retry reruns the complete preflight');
+    await assertStartupFocus(retryPage, 'hello');
+    console.log('PASS fetch failure keeps the gate, retry reruns both requests, and focus moves to visible content');
   } finally {
     await retryPage.close();
+  }
+
+  const fallbackPage = await browser.newPage({viewport:{width:1280, height:900}});
+  try {
+    let gateVisibleAtSceneRequest = false;
+    await fallbackPage.addInitScript(() => {
+      const getContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function(type, ...args) {
+        if (typeof type === 'string' && /^webgl/i.test(type)) {
+          const gate = document.querySelector('#journey-startup-gate');
+          window.__journeyGateVisibleAtWebGLFailure = Boolean(gate && !gate.hidden
+            && document.body.classList.contains('preflight-pending')
+            && getComputedStyle(gate).visibility === 'visible');
+          return null;
+        }
+        return getContext.call(this, type, ...args);
+      };
+    });
+    await fallbackPage.route('**/assets/journey-v2/settings.json', route => route.fulfill({json:{orbitCount:1}}));
+    await fallbackPage.route('**/projects.json', route => route.fulfill({json:manifest}));
+    await fallbackPage.route('**/assets/journey-v2/scene.js', async route => {
+      gateVisibleAtSceneRequest = await fallbackPage.locator('#journey-startup-gate').isVisible();
+      await route.continue();
+    });
+    await fallbackPage.goto(base, {waitUntil:'domcontentloaded'});
+    await fallbackPage.waitForFunction(() => document.body.classList.contains('is-fallback') && !document.body.classList.contains('preflight-pending'));
+    assert.equal(gateVisibleAtSceneRequest, true, 'the gate should remain visible while the scene module loads');
+    assert.equal(await fallbackPage.evaluate(() => window.__journeyGateVisibleAtWebGLFailure), true,
+      'the gate should remain visible while the WebGL failure selects the readable fallback');
+    await assertStartupFocus(fallbackPage, 'hello');
+    console.log('PASS WebGL failure keeps the gate through readable-content setup and hands off focus');
+  } finally {
+    await fallbackPage.close();
   }
 } finally {
   await browser.close();

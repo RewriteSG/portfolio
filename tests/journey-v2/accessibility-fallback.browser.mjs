@@ -63,7 +63,8 @@ try {
   await page.route('**/projects.json', route => route.fulfill({json:fixture(3)}));
   await page.goto(base);
   await ready(page);
-  await page.keyboard.press('Tab');
+  assert.equal(await page.evaluate(() => document.activeElement.id),'hello','successful startup hands focus to visible Journey content');
+  await page.locator('.skip-link').focus();
   assert.equal(await page.evaluate(() => document.activeElement.className),'skip-link');
   assert.equal(await page.locator('.skip-link').evaluate(node => node.getBoundingClientRect().top >= 0),true);
   await page.keyboard.press('Enter');

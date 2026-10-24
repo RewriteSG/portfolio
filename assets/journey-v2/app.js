@@ -337,6 +337,7 @@ document.addEventListener('journey:projects-ready', event => {
   observePanelContent();
   measure(true);
   sizeProjectPreviews();
+  if (!journeyReady) return;
   const requested = location.hash.slice(1);
   if (event.detail.wasAtProjectsAnchor && requested === 'projects') {
     goTo('projects', {instant:true, updateHash:false, focus:true});
@@ -390,10 +391,12 @@ function makeReadable({error = false} = {}) {
     readingButton.textContent = prefersReducedMotion() ? 'Reduced motion: reading as a page' : 'Return to the visual journey';
     readingButton.disabled = prefersReducedMotion();
   }
-  requestAnimationFrame(() => {
-    document.getElementById(id)?.scrollIntoView({behavior:'instant', block:'start'});
-    measure();
-  });
+  if (!body.classList.contains('preflight-pending')) {
+    requestAnimationFrame(() => {
+      document.getElementById(id)?.scrollIntoView({behavior:'instant', block:'start'});
+      measure();
+    });
+  }
 }
 
 function handleError(error) {
@@ -588,6 +591,20 @@ function setStartupChecking() {
   startupRetry.hidden = true;
 }
 
+function revealStartupContent() {
+  body.classList.remove('preflight-pending');
+  startupGate.hidden = true;
+  journeyReady = true;
+  const requested = location.hash.slice(1);
+  const targetId = requested in anchors ? requested : 'hello';
+  goTo(targetId, {instant:true, updateHash:false, focus:true});
+  const target = document.getElementById(targetId);
+  if (target && !target.inert && target.checkVisibility() && Number(getComputedStyle(target).opacity) > .35) {
+    target.focus({preventScroll:true});
+    pendingFocus = undefined;
+  }
+}
+
 function reportStartupFailure(error) {
   startupGate.setAttribute('aria-busy', 'false');
   startupStatus.hidden = true;
@@ -622,9 +639,6 @@ async function bootJourney() {
   try {
     const {manifest, settings} = await fetchStartupData();
     loadProjects(manifest, settings.orbitCount);
-    journeyReady = true;
-    body.classList.remove('preflight-pending');
-    startupGate.hidden = true;
     if (prefersReducedMotion()) makeReadable();
     else { body.classList.add('has-journey'); updatePresentation(0); }
     measure();
@@ -641,19 +655,25 @@ async function bootJourney() {
       onProgress:updatePresentation,
       onError:handleError
     });
-    if (failed) { scene.dispose?.(); return; }
-    window.__journeyScene = scene;
-    scene.setPaused(isReading);
-    scene.setProjectFocus(focusedProjectId);
-    measure();
-    const requested = location.hash.slice(1);
-    if (requested in anchors) { goTo(requested, {instant:true, updateHash:false, focus:true}); scene.setProgress(anchors[requested], true); }
-    else { scrollTo({top:0, behavior:'instant'}); scene.setProgress(0); }
-    scene.frame(performance.now());
-    // Intrinsic font-driven size changes already invalidate the observed copy.
-    // Avoid a second unconditional measurement resetting an explicit scene jump.
-    document.fonts.ready.then(sizeProjectPreviews);
-  } catch (error) { handleError(error); }
+    if (failed) {
+      scene.dispose?.();
+      scene = undefined;
+    } else {
+      window.__journeyScene = scene;
+      scene.setPaused(isReading);
+      scene.setProjectFocus(focusedProjectId);
+      measure();
+      const requested = location.hash.slice(1);
+      scene.setProgress(requested in anchors ? anchors[requested] : 0, true);
+      scene.frame(performance.now());
+      // Intrinsic font-driven size changes already invalidate the observed copy.
+      // Avoid a second unconditional measurement resetting an explicit scene jump.
+      document.fonts.ready.then(sizeProjectPreviews);
+    }
+  } catch (error) {
+    handleError(error);
+  }
+  revealStartupContent();
 }
 
 startupRetry.addEventListener('click', bootJourney);
