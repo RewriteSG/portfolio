@@ -35,10 +35,28 @@ try {
     assert.equal(await page.locator('#projects,.solar-intro').evaluateAll(nodes => nodes.every(node => Number(node.style.opacity) < .006)),true,'the first project must not overlap the index/introduction');
     if (width < 500) assert.equal(measurements.list,true);
     await page.screenshot({path:new URL(`projects-${width}x${height}.png`,output).pathname.replace(/^\/(.:)/,'$1')});
-    // A focused project action stays visible while scrolling away from its scene.
-    await page.locator('#journey-project-Access_0 .project-view-more').focus();
+    // Pointer focus is released at the timeline edge; keyboard-visible focus remains reachable.
+    const projectAction=page.locator('#journey-project-Access_0 .project-view-more');
+    await projectAction.click();
+    await page.waitForFunction(() => document.querySelector('dialog')?.open);
+    await page.locator('.study-close').click();
+    await page.waitForFunction(() => !document.querySelector('dialog')?.open && document.activeElement?.matches('.project-view-more'));
+    assert.equal(await projectAction.evaluate(node => node.matches(':focus-visible')),false,'pointer focus must not become keyboard-visible');
     await page.evaluate(() => { window.__journeyScene.setProgress(1,true); window.__journeyScene.frame(performance.now()); });
-    assert.equal(await page.locator('#journey-project-Access_0').evaluate(node => ({opacity:getComputedStyle(node).opacity,inert:node.inert,hidden:node.getAttribute('aria-hidden')})).then(value => JSON.stringify(value)),JSON.stringify({opacity:'1',inert:false,hidden:'false'}));
+    assert.equal(await page.locator('#journey-project-Access_0').evaluate(node => ({opacity:getComputedStyle(node).opacity,inert:node.inert,hidden:node.getAttribute('aria-hidden')})).then(value => JSON.stringify(value)),JSON.stringify({opacity:'0',inert:true,hidden:'true'}),'pointer-focused content fades and becomes inert outside its scene');
+    await page.reload();
+    await ready(page);
+    await page.waitForFunction(() => document.activeElement.id === 'journey-project-Access_0');
+    const keyboardAction=page.locator('#journey-project-Access_0 .project-view-more');
+    let keyboardFocused=false;
+    for(let step=0;step<60 && !keyboardFocused;step++) {
+      await page.keyboard.press('Tab');
+      keyboardFocused=await keyboardAction.evaluate(node => document.activeElement === node).catch(() => false);
+    }
+    assert.equal(keyboardFocused,true,'Tab navigation must return to the project action');
+    assert.equal(await keyboardAction.evaluate(node => node.matches(':focus-visible')),true,'keyboard input leaves the project action visibly focused');
+    await page.evaluate(() => { window.__journeyScene.setProgress(1,true); window.__journeyScene.frame(performance.now()); });
+    assert.equal(await page.locator('#journey-project-Access_0').evaluate(node => ({opacity:getComputedStyle(node).opacity,inert:node.inert,hidden:node.getAttribute('aria-hidden')})).then(value => JSON.stringify(value)),JSON.stringify({opacity:'1',inert:false,hidden:'false'}),'keyboard-visible project content stays exposed');
     // Tab and Shift+Tab remain inside the labelled native dialog, then Escape restores focus.
     await page.locator('#journey-project-Access_0 .project-view-more').press('Enter');
     await page.waitForFunction(() => document.querySelector('dialog').open);

@@ -115,8 +115,6 @@
 @media(max-height:500px){.has-journey .project-index{left:53%;top:90px}.orbit-control.is-list .orbit-label{left:var(--gutter)!important;top:auto!important;bottom:80px;width:40vw}.project-real-preview{min-height:100px}}
 
 /* Keep keyboard targets readable throughout scene changes and in the static page. */
-.has-journey .scene-panel:focus-within{opacity:1!important;visibility:visible;transform:none!important}
-.orbit-control:focus-within,.orbit-control:focus-within .orbit-label{opacity:1!important}
 .is-projects .scroll-cue:focus{visibility:visible}
 .main-nav>a,.wordmark,.contact-email,.back-to-start,.scroll-cue,.more-menu button{min-height:44px;display:inline-flex;align-items:center}
 .main-nav>a{min-width:44px;justify-content:center}.more-menu button{width:100%}

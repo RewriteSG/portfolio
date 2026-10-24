@@ -245,6 +245,10 @@ function syncSceneContent(scrollPosition = scrollY) {
   });
 }
 
+function hasKeyboardFocusWithin(container) {
+  return container.matches(':focus-visible') || Boolean(container.querySelector(':focus-visible'));
+}
+
 function revealFocusedContent(event) {
   if (!body.classList.contains('has-journey') || !(event.target instanceof Element)) return;
   const panel = event.target.closest('.scene-panel');
@@ -427,7 +431,7 @@ function handleError(error) {
 
 function updateOrbit(p) {
   const opacity = smooth((p - .478) / .035) * (1 - smooth((p - .805) / .025));
-  const focused = ring.contains(document.activeElement);
+  const focused = hasKeyboardFocusWithin(ring);
   if (!scene || !ringStops.length || (!focused && opacity < .005) || isReading || failed) { ring.hidden = true; return; }
   const layout = scene.getOrbitLayout();
   ring.hidden = false;
@@ -438,7 +442,7 @@ function updateOrbit(p) {
   const label = ring.querySelector('.orbit-label');
   label.style.left = `${layout.label.x.toFixed(2)}px`;
   label.style.top = `${layout.label.y.toFixed(2)}px`;
-  label.style.opacity = String(smooth((p - .54) / .03));
+  label.style.opacity = String(focused ? 1 : smooth((p - .54) / .03));
   const useList = ringStops.length > 32 || layout.stops.length < ringStops.length || (innerWidth <= 760 && ringStops.length > 3);
   const stops = ring.querySelector('#orbit-stops');
   // Orbital positions are viewport coordinates; only the condensed list belongs
@@ -482,9 +486,10 @@ function updatePresentation(progress) {
       ? 1 - smooth((p - projectLayout.returnStart) / (projectLayout.returnEnd - projectLayout.returnStart))
       : end === 1 ? 1 : 1 - smooth((p - (end - fade)) / fade);
     const opacity = entry * exit;
-    const visible = opacity > .006;
+    const keyboardFocused = hasKeyboardFocusWithin(panel);
+    const focused = keyboardFocused || panel === restoringFocusPanel;
+    const visible = opacity > .006 || focused;
     panel.classList.toggle('is-active', visible);
-    const focused = panel.contains(document.activeElement) || panel === restoringFocusPanel;
     panel.style.opacity = focused ? '1' : opacity.toFixed(4);
     panel.style.transform = focused || prefersReducedMotion() ? 'none' : `translateY(${((1 - opacity) * (p < start + fade ? 10 : -8)).toFixed(2)}px)`;
     panel.inert = !focused && opacity < .35;

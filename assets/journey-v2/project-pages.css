@@ -85,9 +85,12 @@
 
 /* One dynamically rendered, labelled dialog owns project details. */
 .project-pages{z-index:100;background:#080e1ef5;color:#eff4ed;transition:transform .3s ease;overflow-wrap:anywhere}
-.project-pages::backdrop{background:#080e1ecc}
-.study-page{padding:0 var(--gutter) 64px;max-width:1400px;margin:auto}
-.study-page-header{padding:18px 0;background:#080e1ef2;gap:20px}
+.has-project-page #world{display:block!important;visibility:visible!important}
+.project-pages{background:transparent}
+.project-pages::backdrop{background:rgba(8,14,30,.16)}
+.study-page{padding:0 var(--gutter) 64px 51vw;max-width:none;margin:0;background:linear-gradient(90deg,transparent 0,transparent 49vw,rgba(8,14,30,.12) 51vw,rgba(8,14,30,.08) 100vw)}
+.study-page-header{max-width:820px;margin:0;padding:18px 0;background:rgba(8,14,30,.52);gap:20px}
+.study-page-content{max-width:820px;margin:0;padding:14px 18px 28px;border-radius:4px;background:linear-gradient(145deg,rgba(8,14,30,.24),rgba(8,14,30,.38))}
 .study-close{font-size:13px;min-height:44px}
 .study-intro h1{overflow-wrap:anywhere}
 .study-page-content h1:focus{outline:2px solid #bdf3f1;outline-offset:8px}
@@ -95,10 +98,10 @@
 .study-intro>.study-introduction{grid-row:4}
 .study-long-copy{max-width:750px;font-size:14px;line-height:1.9;white-space:pre-line}.study-long-copy p+p{margin-top:20px}
 .study-metadata{display:grid;grid-template-columns:max-content 1fr;gap:8px 25px;max-width:750px;font-size:12px;margin:30px 0}.study-metadata dt{color:#b7c9cd}.study-metadata dd{min-width:0;overflow-wrap:anywhere}
-.study-gallery{display:grid;gap:40px;margin-top:40px}.study-media{margin:0;max-width:1040px}.study-media img,.study-media video{width:100%;height:auto;display:block;max-height:85vh;object-fit:contain;background:#0c1425}.study-media iframe{display:block;width:100%;aspect-ratio:16/9;border:1px solid var(--line);background:#0c1425}.study-media figcaption{margin-top:12px;font-size:12px;line-height:1.7;color:#b7c9cd}.study-media .study-text-button{font-size:12px;margin-top:8px}
+.study-gallery{display:grid;gap:40px;margin-top:40px}.study-media{margin:0;max-width:820px}.study-media img,.study-media video{width:100%;height:auto;display:block;max-height:85vh;object-fit:contain;background:#0c1425}.study-media iframe{display:block;width:100%;aspect-ratio:16/9;border:1px solid var(--line);background:#0c1425}.study-media figcaption{margin-top:12px;font-size:12px;line-height:1.7;color:#b7c9cd}.study-media .study-text-button{font-size:12px;margin-top:8px}
 .study-links{display:flex;flex-wrap:wrap;gap:15px 30px;margin:30px 0}.study-text-button{overflow-wrap:anywhere}.study-next{margin-top:40px}
 .is-contact .project-pages{--muted:#b7c9cd;--line:rgba(223,239,235,.25)}.is-contact .project-pages :focus-visible{outline-color:#bdf3f1}
-@media(max-width:760px){.study-page{padding:0 var(--gutter) 40px}.study-intro>.project-metadata{margin-top:22px}.study-gallery{gap:28px}.study-long-copy{font-size:13px}.study-next{align-items:flex-start}.study-next .study-text-button{font-size:12px;white-space:normal}}
+@media(max-width:760px){.project-pages::backdrop{background:rgba(8,14,30,.48)}.study-page{padding:0 var(--gutter) 40px;background:transparent}.study-page-header{max-width:none;margin:0;padding:18px 0;background:rgba(8,14,30,.72)}.study-page-content{max-width:none;margin:0;padding:12px 10px 20px;background:linear-gradient(180deg,rgba(8,14,30,.78),rgba(8,14,30,.68))}.study-intro>.project-metadata{margin-top:22px}.study-gallery{gap:28px}.study-long-copy{font-size:13px}.study-next{align-items:flex-start}.study-next .study-text-button{font-size:12px;white-space:normal}}
 
 .study-text-button{min-height:44px;min-width:44px;display:inline-flex;align-items:center}
 .study-page-header{min-height:80px}.study-page-content{padding-top:12px}
