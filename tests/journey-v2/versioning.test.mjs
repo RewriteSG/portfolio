@@ -168,6 +168,11 @@ test('README and Docs describe the production boundary and keep project JSON aut
   assert.match(docs, /`projects\.json` is generated — don't hand-edit it\./);
 });
 
+test('Docs specifies the ASCII project ID character set', () => {
+  const overview = sectionBetween(read('Docs.md'), '## How it works', '## Customizing production copy');
+  assert.match(overview, /IDs may contain only ASCII letters, digits,\s+underscores \(`_`\), and hyphens \(`-`\)\./);
+});
+
 test('Docs lists Journey V2 site-text fields and labels unused legacy settings', () => {
   const docs = read('Docs.md');
   const productionSection = sectionBetween(

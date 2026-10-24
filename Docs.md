@@ -10,8 +10,8 @@ for the app; a GitHub Action regenerates `projects.json` whenever
 
 - Each project lives in its own folder under `projects/<id>/`, with an
   `index.json` describing it and any local image files. The folder name
-  becomes the project ID; IDs may contain letters, numbers, underscores, and
-  hyphens.
+  becomes the project ID; IDs may contain only ASCII letters, digits,
+  underscores (`_`), and hyphens (`-`).
 - On every push to `main` that touches `projects/**`, the workflow in
   `.github/workflows/update-manifest.yml` walks all `projects/*/index.json`
   files, merges them into a single `projects.json` at the repo root (adding
