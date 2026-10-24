@@ -54,11 +54,12 @@ Edit these values and reload; project content remains in
 before rendering them. The Contact section links to the configured email
 address; messages are handled by the visitor's email client.
 
-`assets/info.js` also retains CRT-era settings that the production app does
-not read: `nav`, `stats`, `work`, `home.prompt`, `home.ctaPrimary`,
-`home.ctaSecondary`, `about.prompt`, `contact.prompt`, and `labels`. These
-fields and their inline comments are legacy references; changing them has no
-effect on Journey V2.
+### Legacy settings retained in `assets/info.js`
+
+The file also retains CRT-era settings that the production app does not read:
+`nav`, `stats`, `work`, `home.prompt`, `home.ctaPrimary`, `home.ctaSecondary`,
+`about.prompt`, `contact.prompt`, and `labels`. These fields and their inline
+comments are legacy references; changing them has no effect on Journey V2.
 
 ## Design
 
@@ -72,8 +73,8 @@ are not loaded by the production shell.
 
 1. Create a folder: `projects/YourProjectName/`
 2. Add `index.json` inside it, following the schema below.
-3. Add any image files in the same folder (thumbnail + screenshots).
-   Keep videos external — see the note below.
+3. Add image files in the same folder. Media may use local project files,
+   direct video URLs, or an approved HTTPS embed — see the media notes below.
 4. Push to `main`. The Action rebuilds `projects.json` automatically and
    the live site picks it up on next load.
 
@@ -91,12 +92,12 @@ are not loaded by the production shell.
   "subhead": "A one-line hook shown large on the detail page",
   "long": "A longer paragraph shown next to the media gallery on the detail page.",
   "stack": ["Unity", "C#", "FMOD"],
-  "code": "C#",
-  "commits": ["shipped v1.0", "fixed the storm shader"],
+  "commits": "v1.0 shipped",
   "media": [
-    { "type": "image", "src": "./screenshot1.png", "caption": "Track view" },
+    { "type": "image", "src": "./screenshot1.png", "caption": "Track view", "alt": "Driftwake track at sunset" },
     { "type": "image", "src": "./screenshot2.png", "caption": "Garage menu" },
-    { "type": "video", "src": "https://www.youtube.com/embed/xxxxxxxx", "caption": "Launch trailer" }
+    { "type": "video", "src": "./storm-gameplay.mp4", "caption": "Storm gameplay" },
+    { "type": "embed", "src": "https://www.youtube.com/embed/xxxxxxxx", "caption": "Launch trailer" }
   ],
   "links": {
     "demo": "https://play.example.com/driftwake",
@@ -107,46 +108,50 @@ are not loaded by the production shell.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `name` | string | yes | Display name |
-| `description` | string | yes | Short description — used as the card blurb, and as a fallback for `subhead`/`long` |
-| `thumbnail` | string | yes | Path to thumbnail image (relative to project folder) |
-| `tags` | string[] | no | Categorization tags (also used for grid filtering); the first tag is shown as the card's pill label |
-| `date` | string | no | Release / completion date (ISO 8601) |
-| `status` | `"completed"` \| `"in-progress"` \| `"prototype"` | no | Badges WIP projects on the grid and detail page |
-| `order` | number | no | Manual sort/pin override (higher = earlier); falls back to `date` if omitted |
-| `subhead` | string | no | Large hook shown at the top of the detail page's description column; falls back to `name` |
-| `long` | string | no | Longer body text on the detail page; falls back to `description` |
-| `stack` | string[] | no | Tech-stack pills on the detail page; falls back to `tags` |
-| `code` | string | no | Short language/tech label shown on the card (e.g. `"C++"`); falls back to the second tag |
-| `commits` | string[] | no | Lines shown in the detail page's `commit_log/` terminal box; if omitted, generated from `status`/`tags`/`date` |
-| `media` | array | no | Images and videos shown in the project's gallery |
-| `links` | object | no | External links (`demo`, `github`, `itch.io`, etc.) |
+| `name` | string | no | Display name; defaults to the folder-derived project ID |
+| `description` | string | no | Short project description; used when `subhead` is empty |
+| `thumbnail` | string | no | Optional preview image path relative to the project folder |
+| `tags` | string[] | no | Tags shown with the project and detail metadata |
+| `date` | string | no | Release or completion date |
+| `status` | string | no | Project status; defaults to `unspecified` |
+| `order` | finite number | no | Sort order; higher values appear earlier, with date and source order as fallbacks |
+| `subhead` | string | no | Project hook; falls back to `description` in the chapter and detail heading |
+| `long` | string | no | Optional long-form detail copy, split into paragraphs; it does not fall back to `description` |
+| `stack` | string[] | no | Technology labels shown with project tags and in detail metadata |
+| `commits` | string or finite number | no | One optional value shown in a single `Commits` metadata field; arrays are not accepted |
+| `media` | array | no | Optional image, direct-video, and approved-embed items for previews and the detail gallery |
+| `links` | object | no | External project links; only safe HTTP(S) URLs are rendered |
+| `code` | legacy field | no | Ignored and removed during normalization; it is not displayed by Journey V2 |
+
+The `commits` field accepts one string or finite number. Older arrays of
+commit-log lines are ignored; Journey V2 displays one `Commits` metadata
+value and does not generate a commit log. `code` is a retained legacy key
+from the prior app and has no effect on the production interface.
 
 ### Media entry
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `type` | `"image"` or `"video"` | Media type |
-| `src` | string | Images: path relative to the project folder. Videos: either a direct video file URL (`.mp4`/`.webm`/`.ogg`/`.mov`, hosted externally) or an **embed URL** (YouTube/Vimeo/itch.io). |
+| `type` | `"image"`, `"video"` or `"embed"` | Media type |
+| `src` | string | A local path within the project folder or a safe HTTP(S) URL. Embeds require HTTPS and an approved provider host. |
 | `caption` | string | Optional caption |
-| `cardPreview` | boolean | Video entries only. Marks this clip as the one to autoplay on the project's grid card (home/work) instead of the static `thumbnail` image. See below. |
+| `alt` | string | Optional image alternative text |
+| `cardPreview` | boolean | Legacy hint retained by normalization but ignored by Journey V2; it does not choose a preview or enable playback. |
 
-**Video playback.** A direct video file (`src` ending in `.mp4`/`.webm`/etc.) renders as an HTML5 `<video>` and always autoplays muted/looped on the project's detail page. A YouTube or Vimeo embed URL renders as an `<iframe>` and also autoplays muted on the detail page (autoplay params are appended automatically — just use the plain embed URL). Muted autoplay is a browser requirement, not a choice; visitors can unmute via the native video controls.
+**Video and embed behavior.** Direct video files (`.mp4`, `.webm`, `.ogv`, `.ogg`, or `.mov`) render in native video controls with `preload="none"`; they do not autoplay. Journey V2 embeds only HTTPS URLs from these hosts: `youtube.com`, `www.youtube.com`, `youtube-nocookie.com`, `player.vimeo.com`, `itch.io`, and `html-classic.itch.zone`.
 
-**Card grid autoplay.** Only a *direct video file* can autoplay as a card preview (home/work grids) — either the first `media` entry if it's a direct video, or whichever entry has `"cardPreview": true`. YouTube/Vimeo embeds are intentionally excluded from card previews: autoplaying several embedded players at once across a grid is heavy and often silently blocked by the browser, so those still show the static `thumbnail` image on cards and only autoplay once you're on the single-item detail page.
+Project chapter previews use the first resolvable image media item, then
+`thumbnail`; if neither resolves, a supported direct video can be used.
+Otherwise the preview displays `Preview unavailable`. If the chosen preview
+image fails to load, it also displays `Preview unavailable` rather than
+trying another item. The detail gallery shows images, controlled direct
+videos, or allowlisted embeds. It adds an `Open media in a new tab` link for
+safe media URLs; failed gallery images show `Image unavailable.`
+Non-allowlisted URLs are not embedded.
 
-```json
-"media": [
-  { "type": "video", "src": "https://cdn.example.com/driftwake/clip.mp4", "caption": "Storm gameplay", "cardPreview": true },
-  { "type": "video", "src": "https://www.youtube.com/embed/xxxxxxxx", "caption": "Full trailer" }
-]
-```
-
-**Don't commit `.mp4` files.** Git keeps every version in history forever
-and bloats repo size over time, with no streaming/transcoding benefit on
-GitHub Pages. Host trailers externally (YouTube unlisted, itch.io, Vimeo,
-or a CDN for a direct file) and reference the URL in `src`. Images stay
-in-repo since they're small and load directly.
+Large video files can make the repository history grow quickly. Journey V2
+supports local direct videos, but consider hosting large files externally or
+using an approved embed. Keep image assets small enough for GitHub Pages.
 
 ## Local preview
 

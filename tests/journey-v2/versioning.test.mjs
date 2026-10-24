@@ -14,6 +14,14 @@ const sha256 = file => createHash('sha256').update(readFileSync(file)).digest('h
 const read = file => readFileSync(path.join(projectRoot, file), 'utf8');
 const legacyRedirectScript = read('project.html').match(/<script\b[^>]*>([\s\S]*?)<\/script>/i)?.[1];
 
+function sectionBetween(source, startHeading, endHeading) {
+  const start = source.indexOf(startHeading);
+  assert.notEqual(start, -1, `missing Markdown heading: ${startHeading}`);
+  const end = source.indexOf(endHeading, start + startHeading.length);
+  assert.notEqual(end, -1, `missing Markdown heading after ${startHeading}: ${endHeading}`);
+  return source.slice(start, end);
+}
+
 function legacyRedirectDestination(search) {
   let destination = null;
   runInNewContext(legacyRedirectScript, {
@@ -162,6 +170,16 @@ test('README and Docs describe the production boundary and keep project JSON aut
 
 test('Docs lists Journey V2 site-text fields and labels unused legacy settings', () => {
   const docs = read('Docs.md');
+  const productionSection = sectionBetween(
+    docs,
+    '## Customizing production copy — `assets/info.js`',
+    '### Legacy settings retained in `assets/info.js`'
+  );
+  const legacySection = sectionBetween(
+    docs,
+    '### Legacy settings retained in `assets/info.js`',
+    '## Design'
+  );
   const productionFields = [
     'meta.title', 'meta.description', 'name', 'home.title', 'home.lede',
     'about.title', 'about.bio', 'about.skills.headers', 'about.skills.rows',
@@ -169,17 +187,44 @@ test('Docs lists Journey V2 site-text fields and labels unused legacy settings',
     'contact.email', 'contact.status', 'contact.responseTime', 'socials', 'footer',
   ];
   for (const field of productionFields) {
-    assert.ok(docs.includes(`\`${field}\``), `Docs.md must identify supported field ${field}`);
+    assert.ok(productionSection.includes(`\`${field}\``), `production customization section must identify ${field}`);
   }
 
   const legacyFields = [
     'nav', 'stats', 'work', 'home.prompt', 'home.ctaPrimary', 'home.ctaSecondary',
     'about.prompt', 'contact.prompt', 'labels',
   ];
-  assert.match(docs, /CRT-era settings that the production app does\s+not read/i);
+  assert.match(legacySection, /CRT-era settings that the production app does\s+not read/i);
   for (const field of legacyFields) {
-    assert.ok(docs.includes(`\`${field}\``), `Docs.md must label legacy field ${field}`);
+    assert.ok(legacySection.includes(`\`${field}\``), `legacy settings section must identify ${field}`);
   }
   assert.doesNotMatch(docs, /CRT boot intro|intro\.sh|contact form/i);
   assert.match(docs, /Contact section links to the configured email\s+address/);
+});
+
+test('Docs matches Journey V2 project schema, video behavior, embed allowlist, and fallbacks', () => {
+  const docs = read('Docs.md');
+  const schema = sectionBetween(docs, '## Schema —', '## Local preview');
+  const media = sectionBetween(docs, '### Media entry', '## Local preview');
+
+  assert.match(schema, /\| `commits` \| string or finite number \| no \| One optional value shown in a single `Commits` metadata field; arrays are not accepted \|/);
+  assert.match(schema, /`code` \| legacy field \| no \| Ignored and removed during normalization/);
+  assert.doesNotMatch(schema, /"code"\s*:|"commits"\s*:\s*\[|"cardPreview"\s*:/i);
+  assert.match(schema, /Older arrays of\s+commit-log lines are ignored/);
+  assert.doesNotMatch(schema, /\| `commits` \| (?:array|string\[\])/i);
+  assert.doesNotMatch(schema, /\bcode\b[^\n]*(?:is displayed|is rendered|is shown|appears as a link)/i);
+  assert.match(media, /`cardPreview` \| boolean \| Legacy hint retained by normalization but ignored by Journey V2/i);
+  assert.doesNotMatch(media, /`cardPreview`[^\n]*autoplay|cardPreview\s*[:=]\s*true/i);
+  assert.match(media, /native video controls with `preload="none"`; they do not autoplay/i);
+  assert.doesNotMatch(media, /always autoplays|autoplay params|card grid autoplay|card preview[^\n]*autoplay/i);
+  assert.match(media, /`"image"`, `"video"` or `"embed"`/);
+  assert.match(media, /if neither resolves, a supported direct video can be used/i);
+  assert.match(media, /If the chosen preview\s+image fails to load, it also displays `Preview unavailable`/);
+
+  for (const host of ['youtube.com', 'www.youtube.com', 'youtube-nocookie.com', 'player.vimeo.com', 'itch.io', 'html-classic.itch.zone']) {
+    assert.ok(media.includes(`\`${host}\``), `media guidance must list approved embed host ${host}`);
+  }
+  for (const fallback of ['Preview unavailable', 'Open media in a new tab', 'Image unavailable.']) {
+    assert.ok(media.includes(`\`${fallback}\``), `media guidance must describe ${fallback}`);
+  }
 });
