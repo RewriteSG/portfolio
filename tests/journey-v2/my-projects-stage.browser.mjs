@@ -116,7 +116,36 @@ try {
     assert.equal(await page.locator('#project-catalog-previous').getAttribute('aria-disabled'), null);
     assert.deepEqual(await projectIds(page), ['Catalog_0']);
     assert.equal(await page.locator('#orbit-stops .orbit-stop').count(), 0, 'catalog page count is independent of orbitCount');
-    assert.ok(Math.abs((await readStageState(page)).progress - .535) < .0001, 'zero-orbit catalog follows the solar intro');
+    const stageEntry = await setStageProgress(page, .535);
+    const stageMiddle = await setStageProgress(page, .72);
+    assert.ok(Math.abs(stageEntry.progress - .535) < .0001, 'zero-orbit catalog follows the solar intro');
+    assert.deepEqual(stageMiddle.camera, stageEntry.camera, 'camera composition is settled at the zero-orbit stage entry');
+    assert.deepEqual(stageMiddle.solarScale, stageEntry.solarScale, 'Sun scale stays fixed through the zero-orbit catalog stage');
+    assert.equal(stageMiddle.sunOpacity, stageEntry.sunOpacity, 'Sun stays fully bright throughout the zero-orbit catalog stage');
+    assert.equal(stageMiddle.shaderOpacity, stageEntry.shaderOpacity, 'Sun shader stays fully bright throughout the zero-orbit catalog stage');
+    assert.equal(stageEntry.sunOpacity, 1, 'Sun is fully bright when the zero-orbit stage begins');
+    assert.equal(stageEntry.shaderOpacity, 1, 'Sun shader is fully bright when the zero-orbit stage begins');
+    const stageEnd = await setStageProgress(page, .899);
+    assert.deepEqual(stageEnd.camera, stageEntry.camera, 'camera composition stays fixed until the zero-orbit stage ends');
+    assert.deepEqual(stageEnd.solarScale, stageEntry.solarScale, 'Sun scale stays fixed until the zero-orbit stage ends');
+    assert.equal(stageEnd.sunOpacity, 1, 'Sun remains fully bright through the zero-orbit stage end');
+    assert.equal(stageEnd.shaderOpacity, 1, 'Sun shader remains fully bright through the zero-orbit stage end');
+    const zeroOrbitBoundary = await page.evaluate(() => {
+      const scene = window.__journeyScene;
+      document.activeElement?.blur();
+      const read = () => {
+        const panel = document.querySelector('#projects');
+        return {opacity:Number(getComputedStyle(panel).opacity),inert:panel.inert,ariaHidden:panel.getAttribute('aria-hidden')};
+      };
+      scene.onProgress(.534975);
+      const before = read();
+      scene.onProgress(.534989);
+      return {before,after:read()};
+    });
+    assert.equal(zeroOrbitBoundary.before.opacity, 0, 'the zero-orbit catalog stays hidden just before stage entry');
+    assert.equal(zeroOrbitBoundary.after.opacity, 1, 'a tiny progress step across the zero-orbit boundary reveals the catalog');
+    assert.equal(zeroOrbitBoundary.after.inert, false);
+    await setStageProgress(page, .535);
     assert.equal(await page.locator('#project-catalog-grid img').getAttribute('alt'), 'Catalog Project 0 project preview');
     assert.deepEqual(errors, []);
     console.log('PASS single-project catalog shows 01 / 01 with native disabled arrows and no orbit markers');
@@ -130,6 +159,24 @@ try {
     assert.ok(Math.abs(directStage.progress - .83) < .0001, `direct #projects hash starts after the featured orbit at .83, received ${directStage.progress}`);
     assert.ok(await page.evaluate(() => Boolean(document.querySelector('#project-mount').compareDocumentPosition(document.querySelector('#projects')) & Node.DOCUMENT_POSITION_FOLLOWING)), 'orbit chapters precede the catalog section');
     assert.deepEqual(await projectIds(page), ['Catalog_0', 'Catalog_1', 'Catalog_2', 'Catalog_3']);
+
+    const {beforeStage, afterStage} = await page.evaluate(() => {
+      const scene = window.__journeyScene;
+      document.activeElement?.blur();
+      const read = () => {
+        const panel = document.querySelector('#projects');
+        return {opacity:Number(getComputedStyle(panel).opacity),inert:panel.inert,ariaHidden:panel.getAttribute('aria-hidden')};
+      };
+      scene.onProgress(.829975);
+      const beforeStage = read();
+      scene.onProgress(.829989);
+      return {beforeStage,afterStage:read()};
+    });
+    assert.equal(beforeStage.opacity, 0, 'the catalog stays hidden just before its stage entry boundary');
+    assert.equal(afterStage.opacity, 1, 'a tiny progress step across the stage boundary must reveal the catalog');
+    assert.equal(afterStage.inert, false, 'the catalog becomes interactive as soon as it enters');
+    assert.equal(afterStage.ariaHidden, 'false');
+    await setStageProgress(page, .83);
 
     const accessibleState = await page.evaluate(() => {
       const grid = document.querySelector('#project-catalog-grid');

@@ -78,6 +78,28 @@ try {
     console.log(`PASS responsive/focus/dialog ${width}x${height}: ${JSON.stringify(measurements)}`);
     await page.close();
   }
+  const fallbackDialog = await browser.newPage({viewport:{width:1280,height:900}});
+  await fallbackDialog.route('**/projects.json', route => route.fulfill({json:fixture(1)}));
+  await fallbackDialog.route('**/assets/journey-v2/settings.json', route => route.fulfill({json:{orbitCount:1}}));
+  await fallbackDialog.goto(`${base}#projects`);
+  await ready(fallbackDialog);
+  await fallbackDialog.evaluate(() => { document.querySelector('#project-detail dialog').showModal = undefined; });
+  await fallbackDialog.evaluate(() => window.__journeyProjects.pages.open('Access_0'));
+  await fallbackDialog.waitForFunction(() => document.querySelector('#project-detail dialog')?.open);
+  const fallbackDialogState = await fallbackDialog.evaluate(() => ({
+    open:document.querySelector('#project-detail dialog').open,
+    active:document.activeElement.id,
+    shellInert:document.querySelector('.journey-shell').inert,
+    mountInert:document.querySelector('#project-detail').inert,
+    mastheadInert:document.querySelector('.masthead').inert,
+    startupInert:document.querySelector('#journey-startup-gate').inert,
+  }));
+  assert.deepEqual(fallbackDialogState,{open:true,active:'project-detail-heading',shellInert:false,mountInert:false,mastheadInert:true,startupInert:true},'unsupported native dialog keeps its wrapper active while inerting background siblings');
+  await fallbackDialog.locator('.study-close').click();
+  await fallbackDialog.waitForFunction(() => !document.querySelector('#project-detail dialog').open);
+  assert.equal(await fallbackDialog.evaluate(() => [...document.querySelectorAll('.journey-shell,.masthead,#project-detail,#journey-startup-gate')].every(node => !node.inert)),true,'closing the fallback reader restores every sibling inert state');
+  await fallbackDialog.close();
+  console.log('PASS unsupported-dialog fallback keeps the reader operable and restores the background');
   const page = await browser.newPage();
   await page.route('**/projects.json', route => route.fulfill({json:fixture(3)}));
   await page.goto(base);

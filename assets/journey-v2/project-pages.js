@@ -202,6 +202,20 @@ export function createProjectPages({projects, resolveMedia, onOpen = () => {}, o
     heading.focus({preventScroll:true});
   }
 
+  function inertFallbackBackground() {
+    let branch = mount;
+    while (branch?.parentElement) {
+      const parent = branch.parentElement;
+      [...parent.children].forEach(sibling => {
+        if (sibling === branch || sibling.inert) return;
+        fallbackInert.push(sibling);
+        sibling.inert = true;
+      });
+      if (parent === document.body) break;
+      branch = parent;
+    }
+  }
+
   function show(id) {
     const item = byId.get(id);
     if (!item || destroyed) return false;
@@ -218,8 +232,7 @@ export function createProjectPages({projects, resolveMedia, onOpen = () => {}, o
         dialog.setAttribute('open', '');
         dialog.setAttribute('aria-modal', 'true');
         dialog.setAttribute('role', 'dialog');
-        fallbackInert = [...document.body.children].filter(node => node !== mount && !node.inert);
-        fallbackInert.forEach(node => { node.inert = true; });
+        inertFallbackBackground();
       }
       dialog.classList.add('is-visible');
     }

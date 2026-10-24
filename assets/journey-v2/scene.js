@@ -500,7 +500,7 @@ export class JourneyScene {
     this.streaks.geometry.attributes.position.needsUpdate = true;
   }
 
-  updateCamera(p) {
+  updateCamera(p, solarIntroEnd) {
     let from = path[0], to = path[1];
     for (let i = 1; i < path.length; i++) {
       if (p <= path[i].p) { from = path[i - 1]; to = path[i]; break; }
@@ -525,7 +525,7 @@ export class JourneyScene {
         this.look.y += amount * 14;
       }
     }
-    const solar = smooth(.48, .57, p) * (1 - smooth(.90, .94, p));
+    const solar = smooth(.48, solarIntroEnd, p) * (1 - smooth(.90, .94, p));
     const stacked = this.mobile && this.height > 500;
     const radiusPixels = stacked ? Math.min(this.width * .31, this.height * .145) : Math.min(this.width * .205, this.height * .25);
     const halfHeight = 62.4 * this.height / (2 * radiusPixels);
@@ -552,8 +552,9 @@ export class JourneyScene {
     if (this.reducedMotion) {
       p = p < .1 ? 0 : p < .22 ? .17 : p < .48 ? .31 : p < .83 ? .64 : p < .94 ? .89 : .99;
     }
-    this.updateCamera(p);
-    const orbitMorph = smooth(.48, .57, p) * (1 - smooth(.90, .94, p));
+    const solarIntroEnd = Math.min(.57, this.projectLayout.projectsStageStart);
+    this.updateCamera(p, solarIntroEnd);
+    const orbitMorph = smooth(.48, solarIntroEnd, p) * (1 - smooth(.90, .94, p));
     const orbitScale = lerp(1, .65, orbitMorph);
     const stacked = this.mobile && this.height > 500;
     this.solar.scale.set(orbitScale * (stacked ? 1 : .8 * this.width / this.height), orbitScale, orbitScale);
@@ -563,7 +564,8 @@ export class JourneyScene {
     this.updateStars(p, this.time);
     this.earth.group.visible = p >= .155 && p < .94;
     this.earth.update(this.time, smooth(.25, .52, p), this.reducedMotion);
-    const solarOpacity = smooth(.40, .55, p) * (1 - smooth(.90, .94, p));
+    const solarOpacityEnd = Math.min(.55, this.projectLayout.projectsStageStart);
+    const solarOpacity = smooth(.40, solarOpacityEnd, p) * (1 - smooth(.90, .94, p));
     this.solarOpacity = solarOpacity;
     this.solar.visible = solarOpacity > .001;
     this.solarMaterials.forEach(material => { material.opacity = material.userData.baseOpacity * solarOpacity; });

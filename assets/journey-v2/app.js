@@ -23,6 +23,7 @@ const menuButton = document.querySelector('#menu-toggle');
 const readingButton = document.querySelector('#reading-toggle');
 const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
 const anchors = {hello:0, about:.245, projects:.535, contact:.955};
+const PROJECT_ENTRY_MARGIN = .00002;
 const projectIds = ['projects'];
 let scene;
 let previousProgress = -1;
@@ -213,14 +214,6 @@ function panelContentRange(panel) {
   return sceneScrollRange(Number(panel.dataset.start), Number(panel.dataset.end), panelFade(panel));
 }
 
-function preserveStageLocalProgress(progress) {
-  const start = projectLayout.projectsStageStart;
-  const end = projectLayout.projectsStageEnd;
-  if (progress < start || progress > end) return progress;
-  const localProgress = clamp((progress - start) / (end - start));
-  return start + localProgress * (end - start);
-}
-
 function refreshStaticSectionAnchors() {
   ['about', 'contact'].forEach(id => {
     const panel = panels.find(candidate => candidate.id === id);
@@ -283,7 +276,6 @@ function setMenu(open) {
 
 function measure(preservePosition = false) {
   let progress = preservePosition && scene ? scene.targetProgress : progressAtScroll(scrollMetrics, scrollY);
-  if (preservePosition) progress = preserveStageLocalProgress(progress);
   const panelMetrics = panels.map(panel => ({
     start:Number(panel.dataset.start),
     end:Number(panel.dataset.end),
@@ -472,7 +464,10 @@ function updatePresentation(progress) {
   if (isReading || failed) return;
   const p = clamp(progress);
   updateOrbit(p);
-  if (Math.abs(p - previousProgress) < .000015) return;
+  const projectEntry = projectLayout.projectsStageStart - PROJECT_ENTRY_MARGIN;
+  const crossedProjectEntry = (previousProgress < projectEntry && p >= projectEntry)
+    || (previousProgress >= projectEntry && p < projectEntry);
+  if (Math.abs(p - previousProgress) < .000015 && !crossedProjectEntry) return;
   previousProgress = p;
 
   let active = '';
@@ -481,7 +476,7 @@ function updatePresentation(progress) {
     const start = Number(panel.dataset.start);
     const end = Number(panel.dataset.end);
     const fade = panelFade(panel);
-    const entry = panel.id === 'projects' ? (p >= start - .00002 ? 1 : 0) : start === 0 ? 1 : smooth((p - start) / fade);
+    const entry = panel.id === 'projects' ? (p >= start - PROJECT_ENTRY_MARGIN ? 1 : 0) : start === 0 ? 1 : smooth((p - start) / fade);
     const exit = panel.id === 'projects'
       ? 1 - smooth((p - projectLayout.returnStart) / (projectLayout.returnEnd - projectLayout.returnStart))
       : end === 1 ? 1 : 1 - smooth((p - (end - fade)) / fade);

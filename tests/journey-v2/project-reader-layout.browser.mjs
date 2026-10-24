@@ -26,7 +26,10 @@ try {
   const pointerFocus = await action.evaluate(node => node.matches(':focus-visible'));
   assert.equal(pointerFocus,false,'a pointer click must not create keyboard-visible focus');
   await pointer.evaluate(() => window.scrollTo(0,document.documentElement.scrollHeight));
-  await pointer.waitForTimeout(250);
+  await pointer.waitForFunction(() => {
+    const node = document.querySelector('#journey-project-Reader_One');
+    return Number(getComputedStyle(node).opacity) < .006 && node.inert && node.getAttribute('aria-hidden') === 'true';
+  });
   const faded = await pointer.locator('#journey-project-Reader_One').evaluate(node => ({
     opacity:getComputedStyle(node).opacity,inert:node.inert,hidden:node.getAttribute('aria-hidden')
   }));
