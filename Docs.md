@@ -31,27 +31,34 @@ for the app; a GitHub Action regenerates `projects.json` whenever
 `projects.json` is generated — don't hand-edit it. Edits will be
 overwritten the next time the Action runs.
 
-## Customizing your text — `assets/info.js`
+## Customizing production copy — `assets/info.js`
 
-Everything on the site that isn't project data lives in one file:
-`assets/info.js`. It exports a single `window.SITE_INFO` object that
-`app.js` reads at boot to fill in the page. Edit the values in that file —
-your name/logo, the nav tab labels, the home/work/about/contact prompts,
-headings and lede paragraphs, the about-page bio paragraphs and skills
-table, the education/timeline ASCII blocks, your contact email, socials
-list, availability status, and the footer line. The file is heavily
-commented inline with notes on formatting (e.g. the skills table needs
-exactly 3 columns per row).
+Root `index.html` loads this file before the Journey V2 app. The production
+app reads these `window.SITE_INFO` fields:
 
-No HTML or JS editing is required — just change the string/array values
-inside `SITE_INFO` and reload. This also drives the browser tab title, the
-`<meta name="description">` tag, and the contact form's `mailto:` target.
+- `meta.title`, `meta.description`, and `name` set the browser metadata and
+  identity.
+- `home.title` and `home.lede` set the Hello and identity copy.
+- `about.title`, `about.bio`, `about.skills.headers`, and
+  `about.skills.rows` set the About heading, paragraphs, and skills groups.
+  Each skill header pairs with the values at the same index in each row.
+- Non-empty `about.education` and `about.timeline` strings appear as expandable
+  background details.
+- `contact.title`, `contact.lede`, `contact.email`, `contact.status`, and
+  `contact.responseTime` set the Contact copy and direct email link.
+- `socials` supplies `{ label, url }` links, and `footer` sets the small
+  closing line.
 
-The small terminal-style section labels scattered around the site (`bio/`,
-`skills/`, `education/`, `timeline/`, `stack/`, `commit_log/`, `links/`,
-`direct/`, `selected_work/`) are also editable — they live under
-`SITE_INFO.labels` in `info.js`. Keep or drop the trailing `/` as you like;
-it's just part of the filesystem-style look, not required.
+Edit these values and reload; project content remains in
+`projects/<id>/index.json`. Journey V2 validates the email and social URLs
+before rendering them. The Contact section links to the configured email
+address; messages are handled by the visitor's email client.
+
+`assets/info.js` also retains CRT-era settings that the production app does
+not read: `nav`, `stats`, `work`, `home.prompt`, `home.ctaPrimary`,
+`home.ctaSecondary`, `about.prompt`, `contact.prompt`, and `labels`. These
+fields and their inline comments are legacy references; changing them has no
+effect on Journey V2.
 
 ## Design
 
@@ -184,8 +191,5 @@ portfolio/
 - Since content renders client-side via JS, individual project pages don't
   get per-project Open Graph tags, so social-media link previews will be
   generic rather than project-specific.
-- The animated CRT boot intro plays once per browser session
-  (`sessionStorage`) and can be replayed anytime via the `./intro.sh`
-  button in the header.
-- The contact form has no backend (this is a static site) — submitting it
-  opens the visitor's email client via a pre-filled `mailto:` link.
+- The Contact section uses a direct `mailto:` link; the static site does not
+  submit messages to a server.

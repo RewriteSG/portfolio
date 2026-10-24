@@ -159,3 +159,27 @@ test('README and Docs describe the production boundary and keep project JSON aut
   assert.match(docs, /## Schema — `projects\/<Name>\/index\.json`/);
   assert.match(docs, /`projects\.json` is generated — don't hand-edit it\./);
 });
+
+test('Docs lists Journey V2 site-text fields and labels unused legacy settings', () => {
+  const docs = read('Docs.md');
+  const productionFields = [
+    'meta.title', 'meta.description', 'name', 'home.title', 'home.lede',
+    'about.title', 'about.bio', 'about.skills.headers', 'about.skills.rows',
+    'about.education', 'about.timeline', 'contact.title', 'contact.lede',
+    'contact.email', 'contact.status', 'contact.responseTime', 'socials', 'footer',
+  ];
+  for (const field of productionFields) {
+    assert.ok(docs.includes(`\`${field}\``), `Docs.md must identify supported field ${field}`);
+  }
+
+  const legacyFields = [
+    'nav', 'stats', 'work', 'home.prompt', 'home.ctaPrimary', 'home.ctaSecondary',
+    'about.prompt', 'contact.prompt', 'labels',
+  ];
+  assert.match(docs, /CRT-era settings that the production app does\s+not read/i);
+  for (const field of legacyFields) {
+    assert.ok(docs.includes(`\`${field}\``), `Docs.md must label legacy field ${field}`);
+  }
+  assert.doesNotMatch(docs, /CRT boot intro|intro\.sh|contact form/i);
+  assert.match(docs, /Contact section links to the configured email\s+address/);
+});
