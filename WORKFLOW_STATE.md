@@ -493,4 +493,4 @@
 - The main integration preflight found only `WORKFLOW_STATE.md`, `index.html`, and `project.html` conflicts. The resolved Journey files match the tested branch; workflow notes retain the superset of both branch histories.
 - `git diff --cached --check` reports one pre-existing whitespace issue in the vendored source `overwrite-design/dist/vendor/three.core.js:48480`, inherited from main; it was left unchanged.
 - Final checks: `node --test tests/journey-v2/project-layout.test.mjs` — 12 passed; syntax checks for the changed app, layout, and browser test passed; staged whitespace check passed when excluding that unchanged vendor file.
-- Handoff: verify the merge commit and fast-forward push to `origin/main`; do not modify the separate main checkout's unstaged `WORKFLOW_STATE.md`.
+- Complete: `origin/main` was fast-forwarded to `684110918bcba23dd815c127b41d852f03bc1a01` and verified with `git ls-remote`. The separate local main checkout remains behind with its unstaged `WORKFLOW_STATE.md` edit preserved; reconcile that checkout separately before further local work.
