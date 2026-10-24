@@ -21,12 +21,13 @@ test('reference fixture covers every immutable Journey and shared source file', 
   const sourceFiles = readdirSync(journeyRoot)
     .map(name => `overwrite-design/dist/journey/${name}`)
     .filter(file => statSync(path.join(referenceRoot, file)).isFile());
-  sourceFiles.push('overwrite-design/dist/vendor/three.module.js', 'overwrite-design/dist/assets/raleway.woff2');
+  sourceFiles.push('overwrite-design/dist/vendor/three.module.js', 'overwrite-design/dist/vendor/three.core.js', 'overwrite-design/dist/assets/raleway.woff2');
   assert.deepEqual(referenceFiles, sourceFiles.sort());
 
   for (const [source, expectedHash] of Object.entries(fixture)) {
     assert.equal(sha256(path.join(referenceRoot, source)), expectedHash, `${source} changed from its recorded reference`);
   }
+  assert.equal(sha256(path.join(projectRoot, 'assets/journey-v2/vendor/three.core.js')), fixture['overwrite-design/dist/vendor/three.core.js'], 'the copied Three.js core must match its immutable source');
 });
 
 test('root HTML loads only the Journey V2 production shell in the required order', () => {
@@ -55,6 +56,7 @@ test('Journey V2 includes all required copied assets', () => {
     'assets/journey-v2/earth.js',
     'assets/journey-v2/city.js',
     'assets/journey-v2/vendor/three.module.js',
+    'assets/journey-v2/vendor/three.core.js',
     'assets/journey-v2/fonts/raleway.woff2',
   ];
   for (const file of required) assert.ok(existsSync(path.join(projectRoot, file)), `missing ${file}`);
@@ -66,7 +68,9 @@ test('module imports and CSS URLs resolve within the Journey V2 production bound
     const relative = path.relative(root, target);
     return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
   };
-  const moduleFiles = ['app.js', 'scene.js', 'earth.js', 'city.js'];
+  const moduleFiles = readdirSync(assetsRoot, {recursive:true})
+    .filter(file => file.endsWith('.js'))
+    .map(file => file.replaceAll(path.sep, '/'));
   for (const file of moduleFiles) {
     const source = read(`assets/journey-v2/${file}`);
     const imports = [...source.matchAll(/\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(['"]([^'"]+)['"]\)/g)];

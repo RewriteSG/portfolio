@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Preserve the hashed upstream dependency byte-for-byte, including its whitespace.
+assets/journey-v2/vendor/three.core.js -text -whitespace

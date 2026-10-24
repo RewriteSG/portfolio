@@ -82,3 +82,20 @@
 @media(max-width:760px){.study-page{padding:0 6vw 36px 16vw}.study-page-header{padding:18px 0;gap:10px}.study-home{font-size:17px}.study-home>span{display:none}.study-close{font-size:9px;gap:14px}.study-close>span{font-size:26px}.study-index-intro{padding:40px 0 32px}.study-index-intro h1{font-size:clamp(39px,10vw,47px);line-height:1.04}.study-index-intro h1>span{font-size:11px;margin-top:18px;max-width:240px}.study-index-item{display:block}.study-index-preview{min-height:0;padding:0}.study-index-description{padding-top:22px}.study-index-description h2{font-size:33px}.study-index-description>p:not(.study-kicker){font-size:11px;margin-top:10px}.study-index{gap:44px}.study-index-footnote{font-size:15px;margin-top:44px;padding-top:22px}.study-intro{display:block;padding:19px 0 33px}.study-back{margin-bottom:24px;font-size:10px}.study-intro h1{font-size:clamp(44px,12vw,65px);margin-top:12px}.study-premise{font-size:27px;margin-top:22px;max-width:290px}.study-introduction{font-size:11px;line-height:1.85;margin-top:18px;max-width:350px}.study-disciplines{display:flex;gap:5px 16px;font-size:8px;margin-top:22px}.study-hero-art{margin:0;padding:0}.study-question{display:block;padding:40px 0}.study-question>h2{font-size:32px;letter-spacing:-1px;line-height:1.22;margin-top:14px}.study-question>div{margin-top:28px}.study-question>div>p:last-child{font-size:12px;margin-top:10px;max-width:350px}.study-sections{display:block;padding:36px 0 42px}.study-sections section+section{margin-top:30px}.study-sections h2{font-size:25px}.study-sections p{font-size:11px;line-height:1.9;margin-top:13px;max-width:350px}.study-next{padding-top:26px;align-items:flex-start;gap:25px}.study-next strong{font-size:28px}.study-next>a{column-gap:20px}.study-next>a>span:first-child{font-size:8px}.study-next>a>span:last-child{font-size:22px}.study-next .study-text-button{font-size:9px;gap:15px;white-space:nowrap}}
 @media(prefers-reduced-motion:reduce){.project-pages{transition:none}}
 @media(max-width:500px){.study-next{flex-direction:column;gap:28px}.study-next>a{align-self:flex-end}}
+
+/* One dynamically rendered, labelled dialog owns project details. */
+.project-pages{z-index:100;background:#080e1ef5;color:#eff4ed;transition:transform .3s ease;overflow-wrap:anywhere}
+.project-pages::backdrop{background:#080e1ecc}
+.study-page{padding:0 var(--gutter) 64px;max-width:1400px;margin:auto}
+.study-page-header{padding:18px 0;background:#080e1ef2;gap:20px}
+.study-close{font-size:13px;min-height:44px}
+.study-intro h1{overflow-wrap:anywhere}
+.study-page-content h1:focus{outline:2px solid #bdf3f1;outline-offset:8px}
+.study-intro>.project-metadata{grid-column:1;grid-row:4;align-self:end;max-width:500px}
+.study-intro>.study-introduction{grid-row:4}
+.study-long-copy{max-width:750px;font-size:14px;line-height:1.9;white-space:pre-line}.study-long-copy p+p{margin-top:20px}
+.study-metadata{display:grid;grid-template-columns:max-content 1fr;gap:8px 25px;max-width:750px;font-size:12px;margin:30px 0}.study-metadata dt{color:#b7c9cd}.study-metadata dd{min-width:0;overflow-wrap:anywhere}
+.study-gallery{display:grid;gap:40px;margin-top:40px}.study-media{margin:0;max-width:1040px}.study-media img,.study-media video{width:100%;height:auto;display:block;max-height:85vh;object-fit:contain;background:#0c1425}.study-media iframe{display:block;width:100%;aspect-ratio:16/9;border:1px solid var(--line);background:#0c1425}.study-media figcaption{margin-top:12px;font-size:12px;line-height:1.7;color:#b7c9cd}.study-media .study-text-button{font-size:12px;margin-top:8px}
+.study-links{display:flex;flex-wrap:wrap;gap:15px 30px;margin:30px 0}.study-text-button{overflow-wrap:anywhere}.study-next{margin-top:40px}
+.is-contact .project-pages{--muted:#b7c9cd;--line:rgba(223,239,235,.25)}.is-contact .project-pages :focus-visible{outline-color:#bdf3f1}
+@media(max-width:760px){.study-page{padding:0 var(--gutter) 40px}.study-intro>.project-metadata{margin-top:22px}.study-gallery{gap:28px}.study-long-copy{font-size:13px}.study-next{align-items:flex-start}.study-next .study-text-button{font-size:12px;white-space:normal}}

@@ -1,8 +1,12 @@
+import { loadProjectManifest, resolveProjectMedia, safeEmail, safeHttpUrl } from './project-data.js';
+import { buildProjectPresentation } from './project-presentation.js';
+import { createProjectPages, renderProjectChapters } from './project-pages.js';
+
 const body = document.body;
-const panels = [...document.querySelectorAll('.scene-panel')];
+let panels = [...document.querySelectorAll('.scene-panel')];
 const track = document.querySelector('#journey-track');
 const ring = document.querySelector('#orbit-control');
-const ringStops = [...document.querySelectorAll('.orbit-stop')];
+let ringStops = [...document.querySelectorAll('.orbit-stop')];
 const progressFill = document.querySelector('#page-progress-fill');
 const sceneLabel = document.querySelector('#scene-label');
 const scrollCue = document.querySelector('#scroll-cue');
@@ -22,6 +26,146 @@ let failed = false;
 let pendingFocus;
 let lastSceneLabel = '';
 let lastActive = '';
+let projectPages;
+let restoredProjectHash = null;
+let projectPresentation = buildProjectPresentation([]);
+
+function textElement(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  node.textContent = text;
+  return node;
+}
+
+function bindSiteInfo(info = {}) {
+  const text = (selector, value) => {
+    if (typeof value === 'string' && value.trim()) document.querySelector(selector).textContent = value;
+  };
+  if (typeof info.meta?.title === 'string') document.title = info.meta.title;
+  if (typeof info.meta?.description === 'string') document.querySelector('meta[name="description"]').content = info.meta.description;
+  const name = typeof info.name === 'string' && info.name.trim() ? info.name : 'Portfolio';
+  const wordmark = document.querySelector('.wordmark');
+  const identity = wordmark.querySelector(':scope > span');
+  identity.replaceChildren(document.createTextNode(name), textElement('span', 'identity-caption', info.home?.title || 'Projects and experiments'));
+  wordmark.setAttribute('aria-label', `${name}, back to the beginning`);
+  text('.intro-name', `A little perspective, by ${name}`);
+  text('.hello-line', info.home?.lede);
+  text('.hello-footnote p', info.home?.title);
+  text('#about-heading', info.about?.title);
+  text('.standfirst', info.home?.title);
+  if (Array.isArray(info.about?.bio)) {
+    const copy = document.querySelector('.about-copy > .body-copy');
+    copy.replaceChildren(...info.about.bio.filter(value => typeof value === 'string').map(value => textElement('p', '', value)));
+  }
+  const skills = info.about?.skills;
+  if (Array.isArray(skills?.headers) && Array.isArray(skills?.rows)) {
+    const list = document.querySelector('.disciplines');
+    list.replaceChildren();
+    skills.headers.forEach((header, index) => {
+      if (typeof header !== 'string') return;
+      const item = document.createElement('li');
+      item.append(textElement('strong', '', header));
+      skills.rows.forEach(row => {
+        if (typeof row?.[index] === 'string' && row[index]) item.append(textElement('span', '', row[index]));
+      });
+      list.append(item);
+    });
+  }
+  for (const field of ['education', 'timeline']) {
+    if (typeof info.about?.[field] !== 'string' || !info.about[field]) continue;
+    const disclosure = textElement('details', 'about-background', '');
+    disclosure.append(textElement('summary', '', field === 'education' ? 'Education' : 'Experience'), textElement('pre', '', info.about[field]));
+    document.querySelector('.about-copy').append(disclosure);
+  }
+  text('#contact-heading', info.contact?.title);
+  text('.contact-intro', info.contact?.lede);
+  text('.contact-signoff', [info.contact?.status, info.contact?.responseTime].filter(value => typeof value === 'string' && value).join(' · '));
+  const address = safeEmail(info.contact?.email);
+  const emailLink = document.querySelector('.contact-email');
+  if (address) { emailLink.href = `mailto:${address}`; emailLink.textContent = address; }
+  else { emailLink.removeAttribute('href'); emailLink.textContent = 'Contact address unavailable'; }
+  const socials = textElement('nav', 'contact-socials', '');
+  socials.setAttribute('aria-label', 'Social links');
+  if (Array.isArray(info.socials)) info.socials.forEach(social => {
+    const url = safeHttpUrl(social?.url, document.baseURI);
+    if (!url || typeof social?.label !== 'string') return;
+    const link = textElement('a', '', social.label);
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    socials.append(link);
+  });
+  emailLink.after(socials);
+  if (typeof info.footer === 'string') document.querySelector('.contact-copy').append(textElement('p', 'footer-credit', info.footer));
+}
+
+bindSiteInfo(window.SITE_INFO);
+
+const projectSection = document.querySelector('#projects');
+const projectMount = document.querySelector('#project-mount');
+projectMount.className = 'project-mount';
+projectMount.removeAttribute('aria-live');
+projectSection.after(projectMount);
+projectSection.querySelector('.project-preview').remove();
+projectSection.classList.remove('project-panel');
+projectSection.classList.add('project-index');
+const projectsHeading = document.querySelector('#projects-heading');
+projectsHeading.tabIndex = -1;
+const projectStatus = projectSection.querySelector('.body-copy');
+projectStatus.setAttribute('role', 'status');
+projectStatus.id = 'projects-status';
+const projectJumpList = textElement('nav', 'project-jump-list', '');
+projectJumpList.setAttribute('aria-label', 'Browse projects');
+projectStatus.after(projectJumpList);
+
+function showProjectStatus(message, retry = false) {
+  projectStatus.textContent = message;
+  document.querySelector('#projects-retry')?.remove();
+  if (retry) {
+    const button = textElement('button', 'project-view-more', 'Retry loading projects');
+    button.id = 'projects-retry';
+    button.type = 'button';
+    button.addEventListener('click', loadProjects);
+    projectStatus.after(button);
+  }
+}
+
+async function loadProjects() {
+  showProjectStatus('Loading projects…');
+  try {
+    const {projects, rejected} = await loadProjectManifest();
+    projectPages?.destroy();
+    projectPresentation = buildProjectPresentation(projects);
+    renderProjectChapters({presentation:projectPresentation, mount:projectMount, controls:document.querySelector('#orbit-stops'), indexControls:projectJumpList, resolveMedia:resolveProjectMedia});
+    projectIds.splice(1, projectIds.length, ...projectPresentation.chapters.map(item => item.targetId));
+    projectPresentation.chapters.forEach(item => { anchors[item.targetId] = item.progress; });
+    anchors.projects = projects.length ? .55 : .59;
+    projectSection.dataset.end = projects.length ? '.577' : '.83';
+    projectSection.dataset.start = projects.length ? '.49' : '.565';
+    panels = [...document.querySelectorAll('.scene-panel')];
+    ringStops = [...document.querySelectorAll('.orbit-stop')];
+    body.classList.toggle('has-many-projects', projects.length > 32);
+    const summary = projects.length ? `${projects.length} ${projects.length === 1 ? 'project' : 'projects'} to explore.` : 'No projects to show yet.';
+    showProjectStatus(`${summary}${rejected ? ` ${rejected} invalid ${rejected === 1 ? 'entry was' : 'entries were'} skipped.` : ''}`);
+    projectPages = createProjectPages({projects, presentation:projectPresentation, resolveMedia:resolveProjectMedia,
+      onOpen:item => document.dispatchEvent(new CustomEvent('journey:project-open', {detail:item})),
+      onClose:({direct}) => {
+        // popstate precedes hashchange: preserve the controller's exact scroll restore.
+        restoredProjectHash = location.hash;
+        if (direct) goTo('projects', {instant:true, updateHash:false});
+      },
+    });
+    window.__journeyProjects = {presentation:projectPresentation, pages:projectPages};
+    document.dispatchEvent(new CustomEvent('journey:projects-ready', {detail:{presentation:projectPresentation, projects}}));
+    measure();
+    projectPages.syncFromLocation();
+  } catch (error) {
+    console.warn('Projects could not be loaded.', error);
+    showProjectStatus('Projects could not be loaded. Please try again.', true);
+  }
+}
+
+document.addEventListener('journey:project-route-error', () => showProjectStatus('That project link is unavailable. Choose a project below.'));
 
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const smooth = t => { t = clamp(t); return t * t * (3 - 2 * t); };
@@ -50,6 +194,10 @@ function goTo(id, {focus = false, updateHash = true, instant = false} = {}) {
   if (body.classList.contains('has-journey')) {
     if (focus) pendingFocus = id;
     scrollTo({top: anchors[id] * maxScroll, behavior: instant || prefersReducedMotion() ? 'instant' : 'smooth'});
+    if (instant) {
+      scene?.setProgress(anchors[id], true);
+      updatePresentation(anchors[id]);
+    }
   } else {
     target.scrollIntoView({behavior: instant || prefersReducedMotion() ? 'instant' : 'smooth', block:'start'});
     if (focus) target.focus({preventScroll:true});
@@ -110,13 +258,18 @@ function updateOrbit(p) {
   label.style.top = `${layout.label.y.toFixed(2)}px`;
   label.style.opacity = String(smooth((p - .54) / .03));
   ringStops.forEach((link, index) => {
-    link.style.left = `${layout.stops[index].x.toFixed(2)}px`;
-    link.style.top = `${layout.stops[index].y.toFixed(2)}px`;
+    const stop = layout.stops[index];
+    if (!stop) return;
+    link.style.left = `${stop.x.toFixed(2)}px`;
+    link.style.top = `${stop.y.toFixed(2)}px`;
   });
+  ring.classList.toggle('is-list', ringStops.length > 32 || layout.stops.length < ringStops.length);
   const projectIndex = Math.min(ringStops.length - 1, Math.floor(clamp((p - .565) / (.817 - .565)) * ringStops.length));
-  document.querySelector('#project-number').textContent = String(projectIndex + 1).padStart(2, '0');
-  document.querySelector('#project-count').textContent = ` / ${String(ringStops.length).padStart(2, '0')}`;
-  ring.setAttribute('aria-label', `Project navigation, project ${projectIndex + 1} of ${ringStops.length}`);
+  const selected = projectPresentation.controls[projectIndex];
+  const [number, total] = selected.counter.split(' / ');
+  document.querySelector('#project-number').textContent = number;
+  document.querySelector('#project-count').textContent = ` / ${total}`;
+  ring.setAttribute('aria-label', `Project navigation, ${selected.project.name}, ${selected.counter}`);
   ringStops.forEach((link, index) => {
     if (index === projectIndex) link.setAttribute('aria-current', 'true');
     else link.removeAttribute('aria-current');
@@ -136,7 +289,7 @@ function updatePresentation(progress) {
   panels.forEach(panel => {
     const start = Number(panel.dataset.start);
     const end = Number(panel.dataset.end);
-    const fade = panel.id === 'about' ? .025 : panel.id === 'contact' ? .027 : .012;
+    const fade = Number(panel.dataset.fade) || (panel.id === 'about' ? .025 : panel.id === 'contact' ? .027 : .012);
     const entry = start === 0 ? 1 : smooth((p - start) / fade);
     const exit = end === 1 ? 1 : 1 - smooth((p - (end - fade)) / fade);
     const opacity = entry * exit;
@@ -219,9 +372,14 @@ addEventListener('scroll', () => {
   if (body.classList.contains('has-journey')) scene?.setProgress(clamp(scrollY / maxScroll));
 }, {passive:true});
 addEventListener('resize', () => measure(true), {passive:true});
-addEventListener('hashchange', () => goTo(location.hash.slice(1), {updateHash:false}));
+addEventListener('hashchange', () => {
+  const restored = restoredProjectHash === location.hash;
+  restoredProjectHash = null;
+  if (!restored) goTo(location.hash.slice(1), {updateHash:false});
+});
 addEventListener('pagehide', event => { if (!event.persisted) scene?.dispose?.(); });
 
+loadProjects();
 body.classList.add('has-journey');
 updatePresentation(0);
 measure();

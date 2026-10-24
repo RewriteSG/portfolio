@@ -8,5 +8,6 @@
   "overwrite-design/dist/journey/scene.js": "fcd23624d440e501e48c3e47242fa6b4162011c157a616f78ce9aad8257f0633",
   "overwrite-design/dist/journey/styles.css": "ffb1570189cd84866ca64da4840bcd21c11c0c86e28037182e5fdbbea6ec6796",
   "overwrite-design/dist/vendor/three.module.js": "c8211c69345d2e9949dc7a8ac969380497aa0600a5a8ac6a459c8cd02dd9cb8a",
+  "overwrite-design/dist/vendor/three.core.js": "eb077d2417f61d3e6d9264c317cabc4ea35769ed6b0ab533067292a550784c20",
   "overwrite-design/dist/assets/raleway.woff2": "a3731eea0852407f9afd794f6d66644b4ceccdd81984a1002d36e67d8364dfe8"
 }
