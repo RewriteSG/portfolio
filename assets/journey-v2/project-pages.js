@@ -233,6 +233,9 @@ export function createProjectPages({projects, resolveMedia, onOpen = () => {}, o
     const saved = restore;
     currentId = null;
     closing = false;
+    dialog.querySelectorAll('video,audio').forEach(media => media.pause());
+    // Removing the gallery unloads embedded frames; render() rebuilds it on open.
+    dialog.replaceChildren();
     if (dialog.open && typeof dialog.close === 'function') dialog.close();
     else dialog.removeAttribute('open');
     mount.hidden = true;
