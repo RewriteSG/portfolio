@@ -550,14 +550,25 @@ export class JourneyScene {
     const orbitScale = lerp(1, .65, solar);
     const subjectWidth = stacked ? this.width * .5 : this.width * .5 - Math.min(24, this.width * .04) * 2;
     const sunDiameter = Math.max(1, Math.min(this.height * .30, subjectWidth));
-    const sunRadius = this.solarSun.geometry.parameters.radius * orbitScale * this.solarSun.scale.y;
     const fovTangent = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
-    const catalogDistance = sunRadius * this.height / (sunDiameter * fovTangent);
-    const sunCenter = this.solar.position.clone().add(this.solarSun.position);
     const centerX = stacked ? this.width * .5 : this.width * .25;
     const centerY = stacked ? this.height * .24 : this.height * .5;
     const ndcX = centerX / this.width * 2 - 1;
     const ndcY = 1 - centerY / this.height * 2;
+    const horizontalSlope = ndcX * fovTangent * this.camera.aspect;
+    const verticalSlope = ndcY * fovTangent;
+    const horizontalDominant = Math.abs(horizontalSlope) >= Math.abs(verticalSlope);
+    const dominantSlope = horizontalDominant ? horizontalSlope : verticalSlope;
+    const aspectScale = stacked ? 1 : .8 * this.width / this.height;
+    const baseSunRadius = this.solarSun.geometry.parameters.radius * orbitScale;
+    const catalogDistance = Math.sqrt(
+      (baseSunRadius * this.height / (sunDiameter * fovTangent)) ** 2 + baseSunRadius ** 2,
+    );
+    const tangentDepthSquared = catalogDistance ** 2 - baseSunRadius ** 2;
+    const obliquity = Math.sqrt(Math.max(0, 1 - dominantSlope ** 2 * catalogDistance ** 2 / tangentDepthSquared));
+    const catalogSunScaleX = (horizontalDominant ? obliquity : 1) / aspectScale;
+    const catalogSunScaleZ = horizontalDominant ? 1 : obliquity;
+    const sunCenter = this.solar.position.clone().add(this.solarSun.position);
     const catalogLook = new THREE.Vector3(
       sunCenter.x - ndcX * catalogDistance * fovTangent * this.camera.aspect,
       sunCenter.y - ndcY * catalogDistance * fovTangent,
@@ -576,6 +587,8 @@ export class JourneyScene {
     }
     this.catalogZoom = catalogBlend;
     this.solarReveal = catalogBlend;
+    this.catalogSunScaleX = catalogSunScaleX;
+    this.catalogSunScaleZ = catalogSunScaleZ;
     this.orbitLabelOffset = Math.min(stacked ? 42 : 58, radiusPixels * .45);
     this.camera.lookAt(this.look);
   }
@@ -606,8 +619,13 @@ export class JourneyScene {
     const orbitScale = lerp(1, .65, orbitMorph);
     const stacked = this.mobile && this.height > 500;
     const aspectScale = stacked ? 1 : .8 * this.width / this.height;
-    this.solar.scale.set(orbitScale * lerp(aspectScale, 1, this.catalogZoom), orbitScale, orbitScale);
+    this.solar.scale.set(orbitScale * aspectScale, orbitScale, orbitScale);
     this.solar.rotation.x = orbitMorph * Math.PI / 2;
+    this.solarSun.scale.set(
+      lerp(1, this.catalogSunScaleX, this.catalogZoom),
+      1,
+      lerp(1, this.catalogSunScaleZ, this.catalogZoom),
+    );
     this.earth.group.position.sub(this.solar.position).multiplyScalar(orbitScale).applyAxisAngle(new THREE.Vector3(1, 0, 0), this.solar.rotation.x).add(this.solar.position);
     this.earth.group.scale.multiplyScalar(orbitScale);
     this.updateStars(p, this.time);

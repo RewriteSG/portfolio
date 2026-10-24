@@ -46,6 +46,7 @@ function readStageState(page) {
       animationRunning:state.animationRunning,
       camera:state.camera,
       solarScale:scene.solar.scale.toArray(),
+      sunMeshScale:scene.solarSun.scale.toArray(),
       sunOpacity:scene.getOrbitLayout().opacity,
       shaderOpacity:scene.solarSunMaterial.uniforms.uOpacity.value,
       shaderTime:scene.solarSunMaterial.uniforms.uTime.value,
@@ -105,18 +106,25 @@ function projectedSunBounds(page, progress) {
     }
     const Vector3 = scene.camera.position.constructor;
     scene.solar.updateMatrixWorld(true);
+    scene.solarSun.updateMatrixWorld(true);
     scene.camera.updateMatrixWorld(true);
     const center = scene.solarSun.getWorldPosition(new Vector3());
-    const scale = scene.solarSun.getWorldScale(new Vector3());
-    const radius = scene.solarSun.geometry.parameters.radius * Math.min(scale.x, scale.y, scale.z);
-    const right = new Vector3(1, 0, 0).applyQuaternion(scene.camera.quaternion);
-    const up = new Vector3(0, 1, 0).applyQuaternion(scene.camera.quaternion);
+    const radius = scene.solarSun.geometry.parameters.radius;
+    const localEye = scene.solarSun.worldToLocal(scene.camera.position.clone());
+    const eyeDistance = localEye.length();
+    const eyeDirection = localEye.clone().normalize();
+    const tangentCenter = eyeDirection.clone().multiplyScalar(radius ** 2 / eyeDistance);
+    const tangentRadius = radius * Math.sqrt(1 - (radius / eyeDistance) ** 2);
+    const reference = Math.abs(eyeDirection.y) < .95 ? new Vector3(0, 1, 0) : new Vector3(1, 0, 0);
+    const right = new Vector3().crossVectors(eyeDirection, reference).normalize();
+    const up = new Vector3().crossVectors(eyeDirection, right).normalize();
     const points = [];
-    for (let index = 0; index < 96; index++) {
-      const angle = index / 96 * Math.PI * 2;
-      const point = center.clone()
-        .addScaledVector(right, Math.cos(angle) * radius)
-        .addScaledVector(up, Math.sin(angle) * radius)
+    for (let index = 0; index < 128; index++) {
+      const angle = index / 128 * Math.PI * 2;
+      const point = tangentCenter.clone()
+        .addScaledVector(right, Math.cos(angle) * tangentRadius)
+        .addScaledVector(up, Math.sin(angle) * tangentRadius)
+        .applyMatrix4(scene.solarSun.matrixWorld)
         .project(scene.camera);
       points.push({x:(point.x * .5 + .5) * innerWidth, y:(-point.y * .5 + .5) * innerHeight});
     }
@@ -127,6 +135,7 @@ function projectedSunBounds(page, progress) {
       center:{x:(projectedCenter.x * .5 + .5) * innerWidth, y:(-projectedCenter.y * .5 + .5) * innerHeight},
       left:Math.min(...xs), right:Math.max(...xs), top:Math.min(...ys), bottom:Math.max(...ys),
       width:Math.max(...xs) - Math.min(...xs), height:Math.max(...ys) - Math.min(...ys),
+      silhouette:points,
     };
   }, progress);
 }
@@ -184,11 +193,21 @@ function decodePng(png) {
 
 function measureSunRedCoverage(png, bounds) {
   const image = decodePng(png);
-  const radius = Math.min(bounds.width, bounds.height) / 2;
+  const pointInPolygon = (x, y, polygon) => {
+    let inside = false;
+    for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+      const currentPoint = polygon[index];
+      const previousPoint = polygon[previous];
+      if ((currentPoint.y > y) !== (previousPoint.y > y)
+        && x < (previousPoint.x - currentPoint.x) * (y - currentPoint.y)
+          / (previousPoint.y - currentPoint.y) + currentPoint.x) inside = !inside;
+    }
+    return inside;
+  };
   let diskPixels = 0, redPixels = 0;
-  for (let y = Math.max(0, Math.floor(bounds.center.y - radius)); y < Math.min(image.height, Math.ceil(bounds.center.y + radius)); y++) {
-    for (let x = Math.max(0, Math.floor(bounds.center.x - radius)); x < Math.min(image.width, Math.ceil(bounds.center.x + radius)); x++) {
-      if ((x + .5 - bounds.center.x) ** 2 + (y + .5 - bounds.center.y) ** 2 > radius ** 2) continue;
+  for (let y = Math.max(0, Math.floor(bounds.top)); y < Math.min(image.height, Math.ceil(bounds.bottom)); y++) {
+    for (let x = Math.max(0, Math.floor(bounds.left)); x < Math.min(image.width, Math.ceil(bounds.right)); x++) {
+      if (!pointInPolygon(x + .5, y + .5, bounds.silhouette)) continue;
       diskPixels++;
       const index = (y * image.width + x) * image.bytesPerPixel;
       const red = image.pixels[index], green = image.pixels[index + 1], blue = image.pixels[index + 2];
@@ -232,6 +251,8 @@ try {
       `zero-orbit catalog centers the Sun in the left subject slot: ${JSON.stringify(stageEntryBounds)}`);
     assert.ok(Math.abs(stageEntryBounds.width - 270) < 2 && Math.abs(stageEntryBounds.height - 270) < 2,
       `zero-orbit catalog projects a round 30vh Sun: ${JSON.stringify(stageEntryBounds)}`);
+    assert.ok(Math.abs(stageEntryBounds.width - stageEntryBounds.height) < 2,
+      `zero-orbit catalog keeps the perspective-correct Sun silhouette circular: ${JSON.stringify(stageEntryBounds)}`);
     assert.deepEqual(stageMiddle.camera, stageEntry.camera, 'camera composition is settled at the zero-orbit stage entry');
     assert.deepEqual(stageMiddle.solarScale, stageEntry.solarScale, 'Sun scale stays fixed through the zero-orbit catalog stage');
     assert.equal(stageMiddle.sunReveal, stageEntry.sunReveal, 'shader reveal stays fixed through the zero-orbit catalog stage');
@@ -359,18 +380,23 @@ try {
     assert.deepEqual(orbitOverview.solarScale, orbitEntry.solarScale, 'the solar model stops scaling at the first orbit chapter');
     const finalOrbitExit = await setStageProgress(page, .817);
     assert.deepEqual(finalOrbitExit.camera, orbitOverview.camera, 'the orbit overview remains steady until the final chapter content exits');
+    assert.deepEqual(finalOrbitExit.solarScale, orbitOverview.solarScale, 'the orbit overview keeps the shared solar-group scale unchanged');
     assert.equal(finalOrbitExit.sunReveal, 0, 'molten detail stays hidden while the final orbit chapter remains visible');
     const orbitBounds = await projectedSolarBounds(page, .817);
     assert.ok(Math.abs(orbitBounds.width / 1440 - .40) < .04, `the orbit overview remains about 40vw wide before handoff: ${JSON.stringify(orbitBounds)}`);
     assert.ok(Math.abs(orbitBounds.height / 900 - .50) < .06, `the orbit overview remains about 50vh tall before handoff: ${JSON.stringify(orbitBounds)}`);
     const catalogEntry = await setStageProgress(page, .83);
     assert.notDeepEqual(catalogEntry.camera, finalOrbitExit.camera, 'the camera transitions after the orbit content exits');
+    assert.deepEqual(catalogEntry.solarScale, finalOrbitExit.solarScale, 'catalog framing leaves the shared solar-group transform unchanged');
+    assert.notDeepEqual(catalogEntry.sunMeshScale, finalOrbitExit.sunMeshScale, 'roundness compensation is confined to the Sun mesh');
     assert.equal(catalogEntry.sunReveal, 1, 'shader reveal reaches its final value at catalog entry');
     const catalogBounds = await projectedSunBounds(page, .83);
     assert.ok(Math.abs(catalogBounds.center.x - 360) < 2 && Math.abs(catalogBounds.center.y - 450) < 2,
       `wide catalog centers the Sun at 25vw / 50vh: ${JSON.stringify(catalogBounds)}`);
     assert.ok(Math.abs(catalogBounds.width - 270) < 2 && Math.abs(catalogBounds.height - 270) < 2,
       `wide catalog projects a round Sun at the 30vh cap: ${JSON.stringify(catalogBounds)}`);
+    assert.ok(Math.abs(catalogBounds.width - catalogBounds.height) < 2,
+      `wide catalog uses the perspective-correct sphere silhouette: ${JSON.stringify(catalogBounds)}`);
 
     const beforePageChange = await setStageProgress(page, .86);
     await page.waitForTimeout(100);
