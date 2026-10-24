@@ -99,6 +99,11 @@ test('resolves local media under the encoded project directory and rejects unsaf
   assert.equal(resolveProjectMedia(project, './encoded%20space%2Bplus.png', baseUrl), './projects/Driftwake/encoded%20space%2Bplus.png');
   assert.equal(resolveProjectMedia(project, './literal%2520text.png', baseUrl), './projects/Driftwake/literal%2520text.png');
   assert.equal(resolveProjectMedia(project, './literal%25zz.png', baseUrl), './projects/Driftwake/literal%25zz.png');
+  let deeplyEncodedLiteralPercent = 'literal%2520text.png';
+  for (let layer = 0; layer < 32; layer += 1) {
+    deeplyEncodedLiteralPercent = encodeURIComponent(deeplyEncodedLiteralPercent);
+  }
+  assert.equal(resolveProjectMedia(project, `./${deeplyEncodedLiteralPercent}`, baseUrl), null);
   assert.equal(resolveProjectMedia({ id: 'project_one' }, './folder/a+b.png', baseUrl), './projects/project_one/folder/a%2Bb.png');
   assert.equal(resolveProjectMedia(project, 'https://cdn.example/video.mp4', baseUrl), 'https://cdn.example/video.mp4');
   assert.equal(resolveProjectMedia(project, '//cdn.example/image.png', baseUrl), 'https://cdn.example/image.png');

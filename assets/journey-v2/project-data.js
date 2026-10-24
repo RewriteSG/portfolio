@@ -158,13 +158,18 @@ function decodePercentLayer(value) {
   });
 }
 
+const MAX_NESTED_PERCENT_DECODE_DEPTH = 8;
+
 function hasUnsafePathSyntax(segment) {
   let decoded = segment;
+  let decodeDepth = 0;
   while (true) {
     if (decoded === '.' || decoded === '..' || /[\/\\\u0000-\u001f\u007f]/.test(decoded)) return true;
     const next = decodePercentLayer(decoded);
     if (next === decoded) return false;
+    if (decodeDepth >= MAX_NESTED_PERCENT_DECODE_DEPTH) return true;
     decoded = next;
+    decodeDepth += 1;
   }
 }
 
