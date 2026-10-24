@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0a0a">
+  <meta name="description" content="An interactive recreation of Valentin Marmonier’s 2015 WebGL presentation.">
+  <title>Hello I'm V</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0a0a'/%3E%3Cpath d='m8 8 8 17L24 8' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main id="presentation" aria-label="Interactive presentation">
+    <h1 class="sr-only">Hello, I'm V — an experimental WebGL presentation</h1>
+    <div id="stage" role="img" aria-label="Hello. A field of stars and drifting smoke."></div>
+    <div id="fallback" hidden><p id="fallback-title">HELLO</p><p class="fallback-note">The 3D presentation could not load. Use the dots to explore, or open About me below.</p></div>
+    <header class="menu" id="menu">
+      <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="menu-items"><span></span><span></span><span></span></button>
+      <nav class="menu-items" id="menu-items" aria-label="Main menu" hidden>
+        <button type="button" id="sound-toggle" aria-pressed="false" title="Turn sound on">UNMUTE</button>
+        <button type="button" id="help-toggle">HELP</button>
+        <a href="mailto:valentin.marmonier@gmail.com?subject=Hi&amp;body=Hi%20V">CONTACT</a>
+        <button type="button" id="quality-toggle" title="Switch rendering quality">QUALITY 1</button>
+      </nav>
+    </header>
+    <nav class="scene-map" id="scene-map" aria-label="Presentation scenes"></nav>
+    <button class="about-trigger" id="about-trigger" type="button" aria-label="About me" aria-controls="about"><span class="about-label">ABOUT ME</span><svg aria-hidden="true" viewBox="0 0 25 20"><path d="M2.5 5 12.5 15 22.5 5"/></svg></button>
+  </main>
+
+  <section id="about" class="about" aria-label="About me" tabindex="-1" hidden inert>
+    <button id="back-to-presentation" class="back-trigger" type="button"><svg aria-hidden="true" viewBox="0 0 25 20"><path d="M2.5 15 12.5 5 22.5 15"/></svg><span>BACK TO THE PRESENTATION</span></button>
+    <div class="about-content">
+      <section class="about-section">
+        <h2 class="display-heading">HELLO I'M V</h2>
+        <h3 class="about-intro">I'm V, a french creative / front end developer.</h3>
+        <p>I love to experiment, iterate and build premium experiences.</p>
+        <p>After studying in Paris and working in Shanghai, I'm currently a front end Monk at <a href="https://www.mediamonks.com/" target="_blank" rel="noopener noreferrer">Media Monks</a>, in the lovely city of Amsterdam.</p>
+        <p>You can find me on <a href="https://twitter.com/__vaalentin" target="_blank" rel="noopener noreferrer">Twitter (@__vaalentin)</a>, <a href="https://github.com/vaalentin" target="_blank" rel="noopener noreferrer">Github (vaalentin)</a>. And if you fancy it, even send me an <a href="mailto:valentin.marmonier@gmail.com?subject=Hi&amp;body=Hi%20V">email (valentin.marmonier@gmail.com)</a></p>
+      </section>
+      <section class="about-section">
+        <h2 class="display-heading">ABOUT THIS</h2>
+        <div class="wireframe" aria-hidden="true">
+          <div class="wireframe-main"><div class="wireframe-image wireframe-hero"><i></i><i></i><i></i><i></i></div><div class="wireframe-row"><div class="wireframe-image"></div><div class="wireframe-text"><i></i><i></i><i></i></div></div><div class="wireframe-text"><i></i><i></i><i></i></div><div class="wireframe-row"><div class="wireframe-text"><i></i><i></i><i></i></div><div class="wireframe-image"></div></div></div>
+          <div class="wireframe-side"><div class="wireframe-image"></div><div class="wireframe-text"><i></i><i></i><i></i></div><div class="wireframe-image wireframe-tall"></div></div>
+        </div>
+        <p>This is not really a portfolio, but my attempt at learning WebGL.<br>And it was quite an enjoyable experience thanks to the amazing <a href="https://threejs.org/" target="_blank" rel="noopener noreferrer">Three.js</a> and <a href="https://gsap.com/" target="_blank" rel="noopener noreferrer">GSAP</a></p>
+      </section>
+      <section class="about-section skills">
+        <h2 class="display-heading">MY SKILLS</h2>
+        <h3>Javascript</h3>
+        <p>ES5 / ES6<br>Node.js<br>Coffeescript<br>Typescript</p>
+        <p>Make life easier: jQuery/Zepto, underscore.js/lodash<br>WebGL: Three.js<br>Canvas: paper.js, D3.js<br>Animation: GSAP<br>MV* Frameworks: Backbone.js, AngularJS, React<br>Package manager: Npm, Bower<br>Dependencies injection: AMD (requirejs), CommonJS (browserify)<br>build tools: Grunt, Gulp, Make<br>features detection: Modernizr<br>Tests: Jasmine, PhantomJS</p>
+        <h3>HTML / CSS</h3>
+        <p>HTML5 / CSS3<br>SVG</p>
+        <p>Preprocessors: LESS, SASS<br>Modular: SMACSS, BEM</p>
+        <h3>Misc</h3>
+        <p>PHP: Cake PHP, Wordpress<br>Python &amp; Ruby<br>Version control: Git, SVN<br>I care about the elders: Polyfills and fallbacks for older browsers<br>Design patterns: MV*, Pubsub, Modules, Singleton, Decorator, ...<br>Adobe creative suite: Photoshop, Illustrator, InDesign, ...<br>3D: Maya</p>
+      </section>
+      <footer class="attribution">A recreation of <a href="https://vaalentin.github.io/2015/" target="_blank" rel="noopener noreferrer">Valentin Marmonier’s 2015 experiment</a>. Original words and visual concept by Valentin Marmonier.</footer>
+    </div>
+  </section>
+
+  <div class="help" id="help" role="dialog" aria-modal="true" aria-label="How to explore" hidden>
+    <button class="help-close" id="help-close" type="button" aria-label="Close help"><svg aria-hidden="true" viewBox="0 0 25 20"><path d="m5.8 16.7 13.4-13.4M5.8 3.3l13.4 13.4"/></svg></button>
+    <div class="help-slider">
+      <section class="help-slide" id="help-slide-0" aria-label="Presentation and About me">
+        <svg class="help-layout" viewBox="0 0 200 240" aria-hidden="true"><g fill="none" stroke="currentColor"><path opacity=".2" d="M25 0h150v220H25zM25 110h150"/><path stroke-width="2" d="M10 0h180v110H10z"/></g><path d="m96 95 3 21 6-7 8-2z" fill="currentColor"/></svg>
+        <p>There're 2 parts on the website. Presentation and About me, you can switch between them anytime by clicking on the bottom and top part of the screen.</p>
+      </section>
+      <section class="help-slide" id="help-slide-1" aria-label="Navigating the presentation" hidden>
+        <div class="help-navigation" aria-hidden="true"><div class="mouse"><span></span><i></i></div><div class="keys"><i class="key key-left">◀</i><i class="key key-down">▼</i><i class="key key-up">▲</i><i class="key key-right">▶</i></div></div>
+        <p>You can navigate with either your mouse wheel / trackpad or up / down keys.</p>
+      </section>
+      <nav class="help-map" aria-label="Help pages"><button type="button" data-help-slide="0" aria-label="Help page 1: Presentation and About me" aria-current="true"></button><button type="button" data-help-slide="1" aria-label="Help page 2: Navigation"></button></nav>
+    </div>
+  </div>
+
+  <div class="loader" id="loader" role="status"><p>LOADING</p><div class="loader-progress"></div></div>
+  <p id="announcement" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+  <audio id="ambient-audio" src="./assets/ambient.mp3" preload="none" loop></audio>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

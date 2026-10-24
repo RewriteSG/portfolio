@@ -1,0 +1,5 @@
+node_modules/
+.playwright-cli/
+output/
+.openai/*.tar.gz
+.openai/site-workflow-state.json

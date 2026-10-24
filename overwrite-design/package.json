@@ -1,0 +1,11 @@
+{
+  "name": "2015-experience-reconstruction",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node tools/serve.mjs",
+    "start": "node tools/serve.mjs",
+    "check": "node --check dist/app.js && node --check dist/scene.js"
+  }
+}

@@ -486,3 +486,11 @@
 ## Commit-message Handoff — Journey-native scene overflow (2026-10-24)
 - Recommended message: `feat(journey): make long scenes follow page scroll`.
 - Rationale: describes the visible behavior change; no commit was created.
+
+## Main Integration Handoff — Journey V2 (2026-10-24)
+- Scroll change committed as `3771b5e` (`feat(journey): make long scenes follow page scroll`).
+- Fetched `origin/main` at `b1eee07`; it had not advanced. Integration keeps the Journey V2 root (`index.html`, `project.html`) and current workflow history, while retaining the `overwrite-design/` source tree from main.
+- The main integration preflight found only `WORKFLOW_STATE.md`, `index.html`, and `project.html` conflicts. The resolved Journey files match the tested branch; workflow notes retain the superset of both branch histories.
+- `git diff --cached --check` reports one pre-existing whitespace issue in the vendored source `overwrite-design/dist/vendor/three.core.js:48480`, inherited from main; it was left unchanged.
+- Final checks: `node --test tests/journey-v2/project-layout.test.mjs` — 12 passed; syntax checks for the changed app, layout, and browser test passed; staged whitespace check passed when excluding that unchanged vendor file.
+- Handoff: verify the merge commit and fast-forward push to `origin/main`; do not modify the separate main checkout's unstaged `WORKFLOW_STATE.md`.
