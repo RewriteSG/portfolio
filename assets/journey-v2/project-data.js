@@ -148,6 +148,26 @@ function decodePathSegment(segment) {
   }
 }
 
+function decodePercentLayer(value) {
+  return value.replace(/(?:%[0-9a-f]{2})+/gi, bytes => {
+    try {
+      return decodeURIComponent(bytes);
+    } catch {
+      return bytes.replace(/%([0-9a-f]{2})/gi, (_, byte) => String.fromCharCode(Number.parseInt(byte, 16)));
+    }
+  });
+}
+
+function hasUnsafePathSyntax(segment) {
+  let decoded = segment;
+  while (true) {
+    if (decoded === '.' || decoded === '..' || /[\/\\\u0000-\u001f\u007f]/.test(decoded)) return true;
+    const next = decodePercentLayer(decoded);
+    if (next === decoded) return false;
+    decoded = next;
+  }
+}
+
 /** Resolve local media within projects/<id>/, or accept a safe remote URL. */
 export function resolveProjectMedia(project, src, baseUrl = DEFAULT_BASE_URL) {
   if (typeof src !== 'string' || !src.trim() || /[\u0000-\u001f\u007f]/.test(src)) return null;
@@ -164,10 +184,7 @@ export function resolveProjectMedia(project, src, baseUrl = DEFAULT_BASE_URL) {
   const encodedSegments = [];
   for (const segment of segments) {
     const decoded = decodePathSegment(segment);
-    if (
-      decoded === null || decoded === '.' || decoded === '..' ||
-      /%[0-9a-f]{2}/i.test(decoded) || decoded.includes('/') || decoded.includes('\\')
-    ) return null;
+    if (decoded === null || hasUnsafePathSyntax(decoded)) return null;
     try {
       encodedSegments.push(encodeURIComponent(decoded));
     } catch {

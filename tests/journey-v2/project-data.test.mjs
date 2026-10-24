@@ -97,6 +97,8 @@ test('resolves local media under the encoded project directory and rejects unsaf
   const project = { id: 'Driftwake' };
   assert.equal(resolveProjectMedia(project, './screenshot 1.png', baseUrl), './projects/Driftwake/screenshot%201.png');
   assert.equal(resolveProjectMedia(project, './encoded%20space%2Bplus.png', baseUrl), './projects/Driftwake/encoded%20space%2Bplus.png');
+  assert.equal(resolveProjectMedia(project, './literal%2520text.png', baseUrl), './projects/Driftwake/literal%2520text.png');
+  assert.equal(resolveProjectMedia(project, './literal%25zz.png', baseUrl), './projects/Driftwake/literal%25zz.png');
   assert.equal(resolveProjectMedia({ id: 'project_one' }, './folder/a+b.png', baseUrl), './projects/project_one/folder/a%2Bb.png');
   assert.equal(resolveProjectMedia(project, 'https://cdn.example/video.mp4', baseUrl), 'https://cdn.example/video.mp4');
   assert.equal(resolveProjectMedia(project, '//cdn.example/image.png', baseUrl), 'https://cdn.example/image.png');
@@ -108,6 +110,7 @@ test('resolves local media under the encoded project directory and rejects unsaf
     'nested/%2e%2e/secret.png', 'nested/%2Fsecret.png', 'nested/%5csecret.png',
     '%252e%252e%252fsecret.png', 'nested/%252e%252e/secret.png',
     'nested/%252e%252e%252fsecret.png',
+    'nested/%25252e%25252e%25252fsecret.png', 'nested/%252500secret.png',
     'javascript:alert(1)', 'data:image/png;base64,abc', '', '   ',
   ]) {
     assert.equal(resolveProjectMedia(project, value, baseUrl), null, value);
