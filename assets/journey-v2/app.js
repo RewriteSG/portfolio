@@ -1,5 +1,6 @@
 import { loadProjectManifest, resolveProjectMedia, safeEmail, safeHttpUrl } from './project-data.js';
 import { buildProjectPresentation } from './project-presentation.js';
+import { buildProjectLayout, projectAtProgress, buildScrollMetrics, progressAtScroll, scrollAtProgress } from './project-layout.js';
 import { createProjectPages, renderProjectChapters } from './project-pages.js';
 
 const body = document.body;
@@ -18,15 +19,19 @@ const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
 const anchors = {hello:0, about:.30, projects:.59, contact:1};
 const projectIds = ['projects'];
 let scene;
-let renderedProgress = 0;
 let previousProgress = -1;
-let maxScroll = 1;
+let projectLayout = buildProjectLayout([]);
+let scrollMetrics = buildScrollMetrics(projectLayout, innerHeight);
+let scrollFrame = 0;
+let needsMeasure = false;
+let preserveOnMeasure = false;
 let isReading = false;
 let failed = false;
 let pendingFocus;
 let lastSceneLabel = '';
 let lastActive = '';
 let projectPages;
+let focusedProjectId = null;
 let restoredProjectHash = null;
 let projectPresentation = buildProjectPresentation([]);
 
@@ -148,8 +153,14 @@ async function loadProjects() {
     const summary = projects.length ? `${projects.length} ${projects.length === 1 ? 'project' : 'projects'} to explore.` : 'No projects to show yet.';
     showProjectStatus(`${summary}${rejected ? ` ${rejected} invalid ${rejected === 1 ? 'entry was' : 'entries were'} skipped.` : ''}`);
     projectPages = createProjectPages({projects, presentation:projectPresentation, resolveMedia:resolveProjectMedia,
-      onOpen:item => document.dispatchEvent(new CustomEvent('journey:project-open', {detail:item})),
+      onOpen:item => {
+        focusedProjectId = item.id;
+        scene?.setProjectFocus(item.id);
+        document.dispatchEvent(new CustomEvent('journey:project-open', {detail:item}));
+      },
       onClose:({direct}) => {
+        focusedProjectId = null;
+        scene?.setProjectFocus(null);
         // popstate precedes hashchange: preserve the controller's exact scroll restore.
         restoredProjectHash = location.hash;
         if (direct) goTo('projects', {instant:true, updateHash:false});
@@ -178,14 +189,63 @@ function setMenu(open) {
 }
 
 function measure(preservePosition = false) {
-  maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight);
+  const progress = progressAtScroll(scrollMetrics, scrollY);
+  const contentHeight = panels.reduce((height, panel) => panel.dataset.projectId ? Math.max(height, panel.scrollHeight) : height, 0);
+  scrollMetrics = buildScrollMetrics(projectLayout, innerHeight, contentHeight);
+  track.style.height = `${scrollMetrics.total + innerHeight}px`;
   previousProgress = -1;
   if (body.classList.contains('has-journey')) {
-    if (preservePosition) scrollTo({ top: renderedProgress * maxScroll, behavior: 'instant' });
-    scene?.setProgress(clamp(scrollY / maxScroll));
-    updatePresentation(renderedProgress);
+    if (preservePosition) scrollTo({top:scrollAtProgress(scrollMetrics, progress), behavior:'instant'});
+    const p = progressAtScroll(scrollMetrics, scrollY);
+    scene?.setProgress(p);
+    updatePresentation(p);
   }
 }
+
+// Scroll handlers only schedule; document geometry is read on explicit invalidation.
+function scheduleScrollUpdate({measure:refresh = false, preserve = false} = {}) {
+  needsMeasure ||= refresh;
+  preserveOnMeasure ||= preserve;
+  if (scrollFrame) return;
+  scrollFrame = requestAnimationFrame(() => {
+    scrollFrame = 0;
+    if (needsMeasure) {
+      needsMeasure = false;
+      const restore = preserveOnMeasure;
+      preserveOnMeasure = false;
+      measure(restore);
+    }
+    if (body.classList.contains('has-journey')) scene?.setProgress(progressAtScroll(scrollMetrics, scrollY));
+  });
+}
+
+const observedSizes = new WeakMap();
+const contentObserver = new ResizeObserver(entries => {
+  let changed = false;
+  entries.forEach(entry => {
+    const size = `${entry.contentRect.width},${entry.contentRect.height}`;
+    const previous = observedSizes.get(entry.target);
+    observedSizes.set(entry.target, size);
+    if (previous !== undefined && previous !== size) changed = true;
+  });
+  if (changed) scheduleScrollUpdate({measure:true, preserve:true});
+});
+panels.forEach(panel => contentObserver.observe(panel));
+document.addEventListener('load', event => {
+  if (event.target instanceof HTMLImageElement && event.target.closest('#portfolio')) scheduleScrollUpdate({measure:true, preserve:true});
+}, true);
+document.addEventListener('journey:projects-ready', event => {
+  projectLayout = buildProjectLayout(event.detail.presentation.chapters.map(item => item.id));
+  scene?.setProjectIds(projectLayout.ids);
+  contentObserver.disconnect();
+  panels.forEach(panel => contentObserver.observe(panel));
+  measure(true);
+  sizeProjectPreviews();
+  const requested = location.hash.slice(1);
+  if (event.detail.presentation.chapters.some(item => item.targetId === requested)) {
+    goTo(requested, {instant:true, updateHash:false});
+  }
+});
 
 function goTo(id, {focus = false, updateHash = true, instant = false} = {}) {
   if (!(id in anchors)) return;
@@ -193,7 +253,7 @@ function goTo(id, {focus = false, updateHash = true, instant = false} = {}) {
   const target = document.getElementById(id);
   if (body.classList.contains('has-journey')) {
     if (focus) pendingFocus = id;
-    scrollTo({top: anchors[id] * maxScroll, behavior: instant || prefersReducedMotion() ? 'instant' : 'smooth'});
+    scrollTo({top:scrollAtProgress(scrollMetrics, anchors[id]), behavior: instant || prefersReducedMotion() ? 'instant' : 'smooth'});
     if (instant) {
       scene?.setProgress(anchors[id], true);
       updatePresentation(anchors[id]);
@@ -257,14 +317,20 @@ function updateOrbit(p) {
   label.style.left = `${layout.label.x.toFixed(2)}px`;
   label.style.top = `${layout.label.y.toFixed(2)}px`;
   label.style.opacity = String(smooth((p - .54) / .03));
+  const useList = ringStops.length > 32 || layout.stops.length < ringStops.length;
+  const stops = ring.querySelector('#orbit-stops');
+  // Orbital positions are viewport coordinates; only the condensed list belongs
+  // inside the transformed label. Otherwise its offset displaces every control.
+  const stopsParent = useList ? label : ring;
+  if (stops.parentElement !== stopsParent) stopsParent.append(stops);
+  ring.classList.toggle('is-list', useList);
   ringStops.forEach((link, index) => {
     const stop = layout.stops[index];
     if (!stop) return;
     link.style.left = `${stop.x.toFixed(2)}px`;
     link.style.top = `${stop.y.toFixed(2)}px`;
   });
-  ring.classList.toggle('is-list', ringStops.length > 32 || layout.stops.length < ringStops.length);
-  const projectIndex = Math.min(ringStops.length - 1, Math.floor(clamp((p - .565) / (.817 - .565)) * ringStops.length));
+  const projectIndex = projectAtProgress(projectLayout, p);
   const selected = projectPresentation.controls[projectIndex];
   const [number, total] = selected.counter.split(' / ');
   document.querySelector('#project-number').textContent = number;
@@ -279,7 +345,6 @@ function updateOrbit(p) {
 function updatePresentation(progress) {
   if (isReading || failed) return;
   const p = clamp(progress);
-  renderedProgress = p;
   updateOrbit(p);
   if (Math.abs(p - previousProgress) < .000015) return;
   previousProgress = p;
@@ -368,16 +433,19 @@ readingButton.addEventListener('click', () => {
   measure();
   goTo(location.hash.slice(1) in anchors ? location.hash.slice(1) : lastActive || 'hello', {instant:true, updateHash:false});
 });
-addEventListener('scroll', () => {
-  if (body.classList.contains('has-journey')) scene?.setProgress(clamp(scrollY / maxScroll));
-}, {passive:true});
-addEventListener('resize', () => measure(true), {passive:true});
+addEventListener('scroll', () => scheduleScrollUpdate(), {passive:true});
+addEventListener('resize', () => scheduleScrollUpdate({measure:true, preserve:true}), {passive:true});
 addEventListener('hashchange', () => {
   const restored = restoredProjectHash === location.hash;
   restoredProjectHash = null;
   if (!restored) goTo(location.hash.slice(1), {updateHash:false});
 });
-addEventListener('pagehide', event => { if (!event.persisted) scene?.dispose?.(); });
+addEventListener('pagehide', event => {
+  if (event.persisted) return;
+  cancelAnimationFrame(scrollFrame);
+  contentObserver.disconnect();
+  scene?.dispose?.();
+});
 
 loadProjects();
 body.classList.add('has-journey');
@@ -387,11 +455,13 @@ import('./scene.js').then(({JourneyScene}) => {
   try {
     scene = new JourneyScene(document.querySelector('#world'), {
       reducedMotion:prefersReducedMotion(),
+      projectIds:projectLayout.ids,
       onProgress:updatePresentation,
       onError:handleError
     });
     if (failed) { scene.dispose?.(); return; }
     window.__journeyScene = scene;
+    scene.setProjectFocus(focusedProjectId);
     measure();
     const requested = location.hash.slice(1);
     if (requested in anchors) { goTo(requested, {instant:true, updateHash:false}); scene.setProgress(anchors[requested], true); }

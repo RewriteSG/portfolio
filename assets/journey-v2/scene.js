@@ -1,6 +1,7 @@
 import * as THREE from './vendor/three.module.js';
 import { createEarth } from './earth.js';
 import { createCity } from './city.js';
+import { buildProjectLayout, projectAtProgress, projectOrbit } from './project-layout.js';
 
 const clamp = THREE.MathUtils.clamp;
 const lerp = THREE.MathUtils.lerp;
@@ -54,7 +55,7 @@ function seededRandom(seed = 2026) {
 }
 
 export class JourneyScene {
-  constructor(container, { reducedMotion = false, onProgress = () => {}, onError = () => {} } = {}) {
+  constructor(container, { reducedMotion = false, onProgress = () => {}, onError = () => {}, projectIds = [] } = {}) {
     this.container = container;
     this.reducedMotion = reducedMotion;
     this.onProgress = onProgress;
@@ -66,6 +67,7 @@ export class JourneyScene {
     this.disposed = false;
     this.paused = false;
     this.projectFocus = null;
+    this.projectLayout = buildProjectLayout(projectIds);
     this.focusedPlanetIndex = -1;
     this.focusAmount = 0;
     this.indexAmount = 0;
@@ -94,6 +96,7 @@ export class JourneyScene {
     this.earth = createEarth();
     this.scene.add(this.earth.group);
     this.makeSolarSystem();
+    this.setProjectIds(projectIds);
     this.city = createCity();
     this.city.group.position.y = -120;
     this.city.group.visible = false;
@@ -234,6 +237,68 @@ export class JourneyScene {
     this.scene.add(this.cloudPass);
   }
 
+  setProjectIds(ids) {
+    const layout = buildProjectLayout(ids);
+    if (this.markerGroup && layout.ids.join('\0') === this.projectLayout.ids.join('\0')) return;
+    if (this.markerGroup) {
+      const materials = new Set();
+      const geometries = new Set();
+      this.markerGroup.traverse(object => {
+        if (object.material) materials.add(object.material);
+        if (object.geometry) geometries.add(object.geometry);
+      });
+      this.solarMaterials = this.solarMaterials.filter(material => !materials.has(material));
+      materials.forEach(material => material.dispose());
+      geometries.forEach(geometry => geometry.dispose());
+      this.markerGroup.removeFromParent();
+    }
+    this.projectLayout = layout;
+    this.markerGroup = new THREE.Group();
+    this.solar.add(this.markerGroup);
+    const geometry = layout.ids.length ? new THREE.SphereGeometry(3.3, 24, 16) : null;
+    const makeMarker = item => {
+      const color = new THREE.Color().setHSL(item.hue / 360, .35, .65);
+      const material = new THREE.MeshStandardMaterial({color, emissive:color, emissiveIntensity:.6, roughness:.72, transparent:true});
+      const planet = new THREE.Mesh(geometry, material);
+      planet.position.set(Math.cos(item.angle) * 96, 0, Math.sin(item.angle) * 96);
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({map:this.glowMap, color, transparent:true, opacity:.2, depthWrite:false, blending:THREE.AdditiveBlending}));
+      halo.position.copy(planet.position);
+      halo.scale.set(16, 16, 1);
+      this.markerGroup.add(planet, halo);
+      this.solarMaterials.push(material, halo.material);
+      return {...item, planet, halo};
+    };
+    this.projectMarkers = layout.markers.map(makeMarker);
+    // Dense manifests retain every HTML control with a single moving focus marker.
+    this.activeProjectMarker = layout.needsActiveMarker ? makeMarker(projectOrbit(layout, 0)) : null;
+    this.solarMaterials.forEach(material => {
+      if (material.userData.baseOpacity === undefined) material.userData.baseOpacity = material.opacity;
+    });
+    if (this.activeProjectMarker) this.activeProjectMarker.planet.visible = this.activeProjectMarker.halo.visible = false;
+    this.projectFocus = null;
+    this.focusedPlanetIndex = -1;
+    this.focusAmount = 0;
+    this.focusTransition = null;
+    this.dirty = true;
+  }
+
+  positionActiveMarker(index) {
+    const marker = this.activeProjectMarker;
+    if (!marker || index === null || (marker.index === index && marker.planet.visible)) return;
+    const item = projectOrbit(this.projectLayout, index);
+    Object.assign(marker, item);
+    marker.planet.position.set(Math.cos(item.angle) * 96, 0, Math.sin(item.angle) * 96);
+    marker.halo.position.copy(marker.planet.position);
+    marker.planet.material.color.setHSL(item.hue / 360, .35, .65);
+    marker.planet.material.emissive.copy(marker.planet.material.color);
+    marker.halo.material.color.copy(marker.planet.material.color);
+    marker.planet.visible = marker.halo.visible = true;
+  }
+
+  markerForIndex(index) {
+    return this.activeProjectMarker || this.projectMarkers[index];
+  }
+
   setProgress(progress, immediate = false) {
     const next = clamp(Number.isFinite(progress) ? progress : 0, 0, 1);
     if (Math.abs(next - this.targetProgress) > .000001) this.dirty = true;
@@ -248,10 +313,12 @@ export class JourneyScene {
     this.dirty = true;
   }
 
-  setProjectFocus(index) {
-    const next = Number.isInteger(index) && index >= 0 && index < this.projectMarkers.length ? index : null;
+  setProjectFocus(idOrNull) {
+    const index = this.projectLayout.ids.indexOf(idOrNull);
+    const next = index >= 0 ? index : null;
     if (next === this.projectFocus) return;
     this.projectFocus = next;
+    if (next !== null) this.positionActiveMarker(next);
     if (next !== null) this.focusedPlanetIndex = next;
     this.focusTransition = {
       eye: this.camera.position.clone(),
@@ -278,7 +345,7 @@ export class JourneyScene {
       this.indexAmount = targetIndex;
     }
     if (index >= 0) {
-      const planet = this.projectMarkers[index].planet;
+      const planet = this.markerForIndex(index).planet;
       this.solar.updateMatrixWorld(true);
       const center = planet.getWorldPosition(new THREE.Vector3());
       const radius = planet.geometry.parameters.radius * planet.getWorldScale(new THREE.Vector3()).x;
@@ -305,7 +372,7 @@ export class JourneyScene {
     const othersOpacity = (1 - this.focusAmount) * (1 - this.indexAmount * .82);
     this.solarMaterials.forEach(material => { material.opacity *= othersOpacity; });
     if (this.focusedPlanetIndex >= 0 && this.focusAmount > 0) {
-      const { planet, halo } = this.projectMarkers[this.focusedPlanetIndex];
+      const { planet, halo } = this.markerForIndex(this.focusedPlanetIndex);
       planet.material.opacity = this.solarOpacity * lerp(othersOpacity, 1, this.focusAmount);
       // Let the lit surface carry the close view rather than an oversized glow.
       halo.material.opacity *= 1 - this.focusAmount;
@@ -323,7 +390,7 @@ export class JourneyScene {
     return {
       center,
       label: { x: center.x, y: center.y + (this.orbitLabelOffset || 42) },
-      stops: this.projectMarkers.map(({ planet }) => project(planet.getWorldPosition(new THREE.Vector3()))),
+      stops: this.projectLayout.needsActiveMarker ? [] : this.projectMarkers.map(({ planet }) => project(planet.getWorldPosition(new THREE.Vector3()))),
       opacity: this.solarOpacity || 0,
     };
   }
@@ -434,11 +501,14 @@ export class JourneyScene {
     this.solarMaterials.forEach(material => { material.opacity = material.userData.baseOpacity * solarOpacity; });
     this.planets.forEach(planet => { const angle = planet.angle + this.time * planet.speed; planet.mesh.position.set(Math.cos(angle) * planet.radius, 0, Math.sin(angle) * planet.radius); });
     const scroll = this.progress;
-    const projectProgress = clamp((scroll - .565) / (.83 - .565), 0, 1);
+    const projectProgress = clamp((scroll - this.projectLayout.chapterStart) / (this.projectLayout.chapterEnd - this.projectLayout.chapterStart), 0, 1);
     this.orbitProgress.geometry.setDrawRange(0, Math.floor(projectProgress * 256) * 6);
-    this.projectMarkers.forEach(({ planet, halo }) => {
+    const selectedIndex = projectAtProgress(this.projectLayout, scroll);
+    if (this.activeProjectMarker) this.positionActiveMarker(this.projectFocus ?? selectedIndex);
+    [...this.projectMarkers, ...(this.activeProjectMarker ? [this.activeProjectMarker] : [])].forEach(({ planet, halo, index }) => {
       planet.material.opacity = solarOpacity;
-      halo.material.opacity = solarOpacity * .2;
+      halo.material.opacity = solarOpacity * (index === selectedIndex ? .55 : .2);
+      planet.material.emissiveIntensity = index === selectedIndex ? .9 : .6;
     });
     this.city.group.visible = p > .938;
     if (this.city.group.visible) this.city.update(this.time, this.reducedMotion);
@@ -464,6 +534,10 @@ export class JourneyScene {
       phase: this.container.dataset.world,
       camera: this.camera.position.toArray(),
       projectFocus: this.projectFocus,
+      projectFocusId: this.projectLayout.ids[this.projectFocus] || null,
+      projectCount: this.projectLayout.ids.length,
+      passiveMarkerCount: this.projectMarkers.length,
+      activeMarkerCount: this.activeProjectMarker ? 1 : 0,
       focusAmount: this.focusAmount,
       indexAmount: this.indexAmount,
       earthVisible: this.earth.group.visible,
