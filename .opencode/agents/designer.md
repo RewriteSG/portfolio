@@ -1,7 +1,7 @@
 ---
 description: Designs clear, polished, responsive layouts and interaction patterns for product interfaces
 mode: subagent
-model: github-copilot/claude-sonnet-4.6
+model: openai/gpt-6-luna
 temperature: 0.35
 max_steps: 8
 permission:

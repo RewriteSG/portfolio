@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#103f4d">
+  <meta name="description" content="Hazwan — product designer and creative developer. A voyage through selected work, ideas, and a way of seeing.">
+  <title>Hazwan — A clear direction</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23103f4d'/%3E%3Cpath d='M15 5 5 23h10zm3 5v13h10zM4 26h25' stroke='%23eef4ee' fill='none'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#chapter">Skip to content</a>
+  <div id="sea" aria-hidden="true"></div>
+  <div class="atmosphere" aria-hidden="true"></div>
+  <header class="masthead">
+    <a class="identity" href="#departure" aria-label="Hazwan, beginning"><svg viewBox="0 0 30 32" aria-hidden="true"><path d="M13 3 2 24h11zm4 5v16h11zM2 28h26"/></svg><span>Hazwan<span class="identity-role">Design & development</span></span></a>
+    <nav class="top-nav" aria-label="Main navigation"><a href="#northstar">Selected work <span>3</span></a><a href="#approach">My approach</a><a href="#contact">Get in touch <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 13 3M3 3h10v10"/></svg></a></nav>
+    <a class="all-concepts" href="../" aria-label="View all three designs">All directions <span>↗</span></a>
+  </header>
+  <main id="main">
+    <article id="chapter" class="chapter" tabindex="-1" aria-live="polite" aria-atomic="true"></article>
+    <nav id="chapter-nav" class="chapter-nav" aria-label="Chapters"></nav>
+  </main>
+  <div class="horizon-note" aria-hidden="true"><span class="horizon-line"></span><span>Open water, a clear direction.</span></div>
+  <footer class="voyage-footer">
+    <div class="location"><span class="location-dot"></span>Singapore <span class="muted">/ GMT+8</span></div>
+    <div class="chapter-progress"><span id="current-number">01</span><span class="progress-track"><span id="progress-fill"></span></span><span>07</span></div>
+    <div class="chapter-controls"><button id="previous" type="button" aria-label="Previous chapter"><svg viewBox="0 0 24 14" aria-hidden="true"><path d="M23 7H2m6-6L2 7l6 6"/></svg></button><span id="next-label">Begin the voyage</span><button id="next" type="button" aria-label="Next chapter"><svg viewBox="0 0 24 14" aria-hidden="true"><path d="M1 7h21m-6-6 6 6-6 6"/></svg></button></div>
+  </footer>
+  <div class="scroll-cue" aria-hidden="true"><span></span>Scroll to explore</div>
+  <p id="render-note" class="render-note" hidden>The ocean is taking a moment. All chapters are ready to explore.</p>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

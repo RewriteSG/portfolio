@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f0f0e9">
+  <meta name="description" content="Hazwan is a product designer and creative developer in Singapore. Explore a small world of considered digital work.">
+  <title>Small worlds — Hazwan</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23f0f0e9'/%3E%3Cpath d='M4 4h11v11H4z' fill='%23567844'/%3E%3Cpath d='M17 11h11v11H17z' fill='%23a7b894'/%3E%3Cpath d='M4 17h11v11H4z' fill='%237d945f'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip" href="#story">Skip to presentation</a>
+  <header class="masthead">
+    <a class="identity" href="#intro" aria-label="Hazwan, introduction"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>hazwan<span class="identity-dot">.</span></a>
+    <p class="masthead-role">Product designer<br>& creative developer</p>
+    <nav class="topnav" aria-label="Main navigation">
+      <button type="button" data-go="2">Selected work <span>3</span></button>
+      <button type="button" data-go="1">About</button>
+      <button type="button" data-go="6">Let's talk <span aria-hidden="true">↗</span></button>
+    </nav>
+    <a class="all-directions" href="../" aria-label="View all three designs">All directions <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <main id="story" tabindex="-1">
+    <div class="world" id="world" aria-label="An isometric miniature island with a pavilion, forest, canal, and lookout">
+      <canvas id="world-canvas" aria-hidden="true"></canvas>
+      <div class="fallback" id="fallback" hidden><div class="fallback-island"><i></i><i></i><i></i><i></i><i></i></div><p>A world of thoughtful connections.</p></div>
+      <button type="button" class="world-pin" data-pin="northstar" data-go="2"><span class="pin-dot"></span><span>Northstar <small>01</small></span></button>
+      <button type="button" class="world-pin" data-pin="lumen" data-go="3"><span class="pin-dot"></span><span>Lumen <small>02</small></span></button>
+      <button type="button" class="world-pin" data-pin="field-notes" data-go="4"><span class="pin-dot"></span><span>Field Notes <small>03</small></span></button>
+      <span class="world-caption"><span class="tiny-square"></span> A place for ideas to take shape.</span>
+    </div>
+
+    <div class="stories">
+      <section class="story active" id="intro" aria-labelledby="intro-title">
+        <p class="chapter-label"><span class="status-dot"></span> A portfolio in seven places</p>
+        <h1 id="intro-title"><span>Small worlds.</span><span>Big possibilities.</span></h1>
+        <p class="intro-copy">I’m Hazwan. I make complex digital<br class="desktop-break"> products feel obvious.</p>
+        <button class="text-action" type="button" data-go="2">Take a look around <span aria-hidden="true">↗</span></button>
+        <p class="location">Based in Singapore <span>01°N, 103°E</span></p>
+      </section>
+
+      <section class="story" id="about" aria-labelledby="about-title" hidden>
+        <p class="chapter-label">The person behind the pixels</p>
+        <h2 id="about-title">Good things<br>start with<br>curiosity.</h2>
+        <p class="body-copy">I’m a product designer and creative developer who likes getting close to a problem, then making room for a better possibility.</p>
+        <p class="body-copy secondary-copy">From the first question to the final interaction, I connect structure, identity and a little unexpected delight.</p>
+        <p class="small-note">A considered approach. A hands-on practice.</p>
+      </section>
+
+      <section class="story project-story" id="northstar" aria-labelledby="northstar-title" hidden>
+        <p class="chapter-label">Selected work <span>01 / 03</span></p>
+        <h2 id="northstar-title">Find the<br>signal.</h2>
+        <p class="project-name">Northstar <span>Product system</span></p>
+        <p class="body-copy">Research is only useful when people can find it. Northstar gives scattered customer signals a shared home and a clearer path to decisions.</p>
+        <dl class="project-details"><div><dt>The question</dt><dd>What do we already know?</dd></div><div><dt>The response</dt><dd>Find, frame and share research.</dd></div><div><dt>The focus</dt><dd>Information architecture & interaction</dd></div></dl>
+        <p class="small-note">An independent portfolio study.</p>
+      </section>
+
+      <section class="story project-story" id="lumen" aria-labelledby="lumen-title" hidden>
+        <p class="chapter-label">Selected work <span>02 / 03</span></p>
+        <h2 id="lumen-title">A clear<br>point of view.</h2>
+        <p class="project-name">Lumen <span>Identity system</span></p>
+        <p class="body-copy">A portable identity for a studio making thoughtful tools for teams. A simple visual language brings its point of view into every small interaction.</p>
+        <dl class="project-details"><div><dt>The question</dt><dd>How does thoughtfulness show up?</dd></div><div><dt>The response</dt><dd>A recognizable, flexible visual system.</dd></div><div><dt>The focus</dt><dd>Art direction, typography & expression</dd></div></dl>
+        <p class="small-note">An independent portfolio study.</p>
+      </section>
+
+      <section class="story project-story" id="field-notes" aria-labelledby="field-notes-title" hidden>
+        <p class="chapter-label">Selected work <span>03 / 03</span></p>
+        <h2 id="field-notes-title">Leave room<br>to wonder.</h2>
+        <p class="project-name">Field Notes <span>Digital workspace</span></p>
+        <p class="body-copy">The best questions rarely arrive fully formed. Field Notes is a flexible workspace for gathering fragments, following connections and keeping teams curious.</p>
+        <dl class="project-details"><div><dt>The question</dt><dd>Where can unfinished thinking live?</dd></div><div><dt>The response</dt><dd>A space that grows with the question.</dd></div><div><dt>The focus</dt><dd>Product direction & interaction design</dd></div></dl>
+        <p class="small-note">An independent portfolio study.</p>
+      </section>
+
+      <section class="story approach-story" id="approach" aria-labelledby="approach-title" hidden>
+        <p class="chapter-label">How I get there</p>
+        <h2 id="approach-title">Care in<br>every step.</h2>
+        <ol class="approach-list"><li><span>01</span><div><h3>Find the real question.</h3><p>Context before concepts. Understand the people, the friction and what matters.</p></div></li><li><span>02</span><div><h3>Shape the signal.</h3><p>Turn loose parts into a system people can understand and trust.</p></div></li><li><span>03</span><div><h3>Make the next step obvious.</h3><p>Bring clarity to the details, with a point of view that holds everything together.</p></div></li></ol>
+      </section>
+
+      <section class="story contact-story" id="contact" aria-labelledby="contact-title" hidden>
+        <p class="chapter-label"><span class="status-dot"></span> The next possibility</p>
+        <h2 id="contact-title">What could<br>we make<br>together?</h2>
+        <p class="body-copy">A new product. A clearer direction.<br>A small idea with somewhere to go.</p>
+        <a class="email-link" href="mailto:hello@hazwan.design">hello@hazwan.design <span aria-hidden="true">↗</span></a>
+        <p class="location">Singapore <span>GMT +8</span></p>
+      </section>
+    </div>
+
+    <aside class="field-caption" aria-hidden="true"><span id="place-name">The whole picture</span><span id="place-coordinate">Island overview / 00</span></aside>
+    <div class="next-prompt" aria-hidden="true"><span>Scroll to explore</span><span>↓</span></div>
+    <span class="sr-only" id="chapter-status" aria-live="polite">Chapter 1 of 7: Introduction</span>
+  </main>
+
+  <footer class="presentation-controls">
+    <div class="chapter-count"><span id="current-number">01</span><span>/ 07</span></div>
+    <nav class="chapter-nav" aria-label="Presentation chapters">
+      <button type="button" data-go="0" aria-label="Chapter 1: Introduction" aria-current="step"><span class="chapter-line"></span><span>Start</span></button>
+      <button type="button" data-go="1" aria-label="Chapter 2: About"><span class="chapter-line"></span><span>About</span></button>
+      <button type="button" data-go="2" aria-label="Chapter 3: Northstar"><span class="chapter-line"></span><span>Northstar</span></button>
+      <button type="button" data-go="3" aria-label="Chapter 4: Lumen"><span class="chapter-line"></span><span>Lumen</span></button>
+      <button type="button" data-go="4" aria-label="Chapter 5: Field Notes"><span class="chapter-line"></span><span>Field Notes</span></button>
+      <button type="button" data-go="5" aria-label="Chapter 6: Approach"><span class="chapter-line"></span><span>Approach</span></button>
+      <button type="button" data-go="6" aria-label="Chapter 7: Contact"><span class="chapter-line"></span><span>Say hello</span></button>
+    </nav>
+    <div class="arrow-controls"><button id="previous" type="button" aria-label="Previous chapter" disabled>←</button><button id="next" type="button" aria-label="Next chapter">→</button></div>
+  </footer>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

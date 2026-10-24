@@ -1,7 +1,7 @@
 ---
 description: Reviews the implementation for correctness and maintainability using WORKFLOW_STATE.md
 mode: subagent
-model: github-copilot/gpt-5.4
+model: openai/gpt-6-luna
 temperature: 0.1
 max_steps: 5
 permission:

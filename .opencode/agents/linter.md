@@ -1,7 +1,7 @@
 ---
 description: Runs linting and formatting checks and records the result in WORKFLOW_STATE.md
 mode: subagent
-model: github-copilot/gpt-5-mini
+model: openai/gpt-6-luna
 temperature: 0.0
 max_steps: 4
 permission:

@@ -1,7 +1,7 @@
 ---
 description: Reviews the current plan in WORKFLOW_STATE.md and decides whether a better plan exists
 mode: subagent
-model: github-copilot/gpt-5.4
+model: openai/gpt-6-luna
 temperature: 0.3
 max_steps: 4
 permission:
