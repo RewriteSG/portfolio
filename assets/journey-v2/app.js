@@ -22,7 +22,7 @@ const menu = document.querySelector('#more-menu');
 const menuButton = document.querySelector('#menu-toggle');
 const readingButton = document.querySelector('#reading-toggle');
 const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
-const anchors = {hello:0, about:.245, projects:.577, contact:.955};
+const anchors = {hello:0, about:.245, projects:.535, contact:.955};
 const projectIds = ['projects'];
 let scene;
 let previousProgress = -1;
@@ -121,7 +121,6 @@ const projectSection = document.querySelector('#projects');
 const projectMount = document.querySelector('#project-mount');
 projectMount.className = 'project-mount';
 projectMount.removeAttribute('aria-live');
-projectSection.after(projectMount);
 projectSection.querySelector('.project-preview')?.remove();
 projectSection.classList.remove('project-panel');
 projectSection.classList.add('project-index');
@@ -146,13 +145,14 @@ function loadProjects({projects, rejected}, orbitCount) {
   projectPages?.destroy();
   projectCatalog?.destroy();
   projectPresentation = buildProjectPresentation(projects, orbitCount);
+  projectLayout = buildProjectLayout(projectPresentation.chapters.map(item => item.id));
   renderProjectChapters({presentation:projectPresentation, mount:projectMount, controls:document.querySelector('#orbit-stops'), indexControls:projectJumpList, resolveMedia:resolveProjectMedia});
   projectIds.splice(1, projectIds.length, ...projectPresentation.chapters.map(item => item.targetId));
-  projectSection.dataset.end = projects.length ? '.565' : '.83';
-  projectSection.dataset.start = projects.length ? '.535' : '.565';
+  projectSection.dataset.start = String(projectLayout.projectsStageStart);
+  projectSection.dataset.end = String(projectLayout.projectsStageEnd);
   panels = [...document.querySelectorAll('.scene-panel')];
   refreshStaticSectionAnchors();
-  anchors.projects = panelContentRange(projectSection).start;
+  anchors.projects = projectLayout.projectsStageStart;
   projectPresentation.chapters.forEach(item => {
     const panel = panels.find(candidate => candidate.id === item.targetId);
     anchors[item.targetId] = panel ? panelContentRange(panel).start : item.progress;
@@ -213,6 +213,14 @@ function panelContentRange(panel) {
   return sceneScrollRange(Number(panel.dataset.start), Number(panel.dataset.end), panelFade(panel));
 }
 
+function preserveStageLocalProgress(progress) {
+  const start = projectLayout.projectsStageStart;
+  const end = projectLayout.projectsStageEnd;
+  if (progress < start || progress > end) return progress;
+  const localProgress = clamp((progress - start) / (end - start));
+  return start + localProgress * (end - start);
+}
+
 function refreshStaticSectionAnchors() {
   ['about', 'contact'].forEach(id => {
     const panel = panels.find(candidate => candidate.id === id);
@@ -240,7 +248,7 @@ function syncSceneContent(scrollPosition = scrollY) {
 function revealFocusedContent(event) {
   if (!body.classList.contains('has-journey') || !(event.target instanceof Element)) return;
   const panel = event.target.closest('.scene-panel');
-  if (!panel || panel.inert) return;
+  if (!panel || panel.inert || event.target === panel) return;
   const overflow = Math.max(0, panel.scrollHeight - panel.clientHeight);
   if (!overflow) return;
   const panelBounds = panel.getBoundingClientRect();
@@ -270,7 +278,8 @@ function setMenu(open) {
 }
 
 function measure(preservePosition = false) {
-  const progress = preservePosition && scene ? scene.targetProgress : progressAtScroll(scrollMetrics, scrollY);
+  let progress = preservePosition && scene ? scene.targetProgress : progressAtScroll(scrollMetrics, scrollY);
+  if (preservePosition) progress = preserveStageLocalProgress(progress);
   const panelMetrics = panels.map(panel => ({
     start:Number(panel.dataset.start),
     end:Number(panel.dataset.end),
@@ -356,6 +365,7 @@ document.addEventListener('journey:projects-ready', event => {
 function goTo(id, {focus = false, updateHash = true, instant = false} = {}) {
   if (!(id in anchors)) return;
   setMenu(false);
+  previousProgress = -1;
   const target = document.getElementById(id);
   if (body.classList.contains('has-journey')) {
     if (focus) pendingFocus = id;
@@ -364,7 +374,7 @@ function goTo(id, {focus = false, updateHash = true, instant = false} = {}) {
       scene?.setProgress(anchors[id], true);
       updatePresentation(anchors[id]);
       syncSceneContent(scrollY);
-    }
+    } else updatePresentation(scene?.progress ?? progressAtScroll(scrollMetrics, scrollY));
   } else {
     target.scrollIntoView({behavior: instant || prefersReducedMotion() ? 'instant' : 'smooth', block:'start'});
     if (focus) target.focus({preventScroll:true});
@@ -416,7 +426,7 @@ function handleError(error) {
 }
 
 function updateOrbit(p) {
-  const opacity = smooth((p - .478) / .035) * (1 - smooth((p - .817) / .025));
+  const opacity = smooth((p - .478) / .035) * (1 - smooth((p - .805) / .025));
   const focused = ring.contains(document.activeElement);
   if (!scene || !ringStops.length || (!focused && opacity < .005) || isReading || failed) { ring.hidden = true; return; }
   const layout = scene.getOrbitLayout();
@@ -467,7 +477,7 @@ function updatePresentation(progress) {
     const start = Number(panel.dataset.start);
     const end = Number(panel.dataset.end);
     const fade = panelFade(panel);
-    const entry = start === 0 ? 1 : smooth((p - start) / fade);
+    const entry = panel.id === 'projects' ? (p >= start - .00002 ? 1 : 0) : start === 0 ? 1 : smooth((p - start) / fade);
     const exit = end === 1 ? 1 : 1 - smooth((p - (end - fade)) / fade);
     const opacity = entry * exit;
     const visible = opacity > .006;
@@ -494,13 +504,13 @@ function updatePresentation(progress) {
   }
 
   progressFill.style.transform = `scaleX(${p.toFixed(5)})`;
-  const inProjects = p >= .48 && p < .84;
+  const inProjects = p >= .48 && p < .90;
   body.classList.toggle('is-projects', inProjects);
   body.classList.toggle('is-contact', p >= .94);
-  const shade = p < .15 ? .08 : p < .48 ? .65 : p < .84 ? .08 : p < .94 ? .25 : 0;
+  const shade = p < .15 ? .08 : p < .48 ? .65 : p < .90 ? .08 : p < .94 ? .25 : 0;
   body.style.setProperty('--shade', shade);
 
-  const phaseLabel = p < .10 ? 'A little perspective' : p < .22 ? 'A change in perspective' : p < .48 ? 'The human in the system' : p < .83 ? 'Selected studies' : p < .94 ? 'Back to earth' : 'A new conversation';
+  const phaseLabel = p < .10 ? 'A little perspective' : p < .22 ? 'A change in perspective' : p < .48 ? 'The human in the system' : p < .90 ? 'Selected studies' : p < .94 ? 'Back to earth' : 'A new conversation';
   if (phaseLabel !== lastSceneLabel) {
     lastSceneLabel = phaseLabel;
     sceneLabel.textContent = phaseLabel;

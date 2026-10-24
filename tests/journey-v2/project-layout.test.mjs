@@ -9,14 +9,25 @@ for (const count of [0, 1, 3, 8, 64]) {
     assert.deepEqual(layout.ids, ids);
     assert.equal(layout.stops.length, count);
     assert.equal(layout.chapterStart, .565);
-    assert.equal(layout.chapterEnd, .817);
+    assert.equal(layout.chapterEnd, .83);
+    assert.equal(layout.projectsStageStart, count ? .83 : .535);
+    assert.equal(layout.projectsStageEnd, .90);
+    assert.equal(layout.returnStart, .90);
+    assert.equal(layout.returnEnd, .94);
+    assert.equal(layout.projectsStageEnd, layout.returnStart, 'the catalog stage ends exactly where the return starts');
+    assert.ok(layout.returnEnd > layout.returnStart, 'the return has a nonempty interval');
     assert.equal(layout.markers.length, Math.min(count, 32));
     assert.equal(layout.needsActiveMarker, count > 32);
     layout.stops.forEach((stop, i) => {
-      assert.equal(stop, .565 + ((i + .5) / count) * .252);
+      assert.equal(stop, .565 + ((i + .5) / count) * .265);
       assert.equal(projectAtProgress(layout, stop), i);
-      if (i) assert.ok(Math.abs(stop - layout.stops[i - 1] - .252 / count) < 1e-12);
+      if (i) assert.ok(Math.abs(stop - layout.stops[i - 1] - .265 / count) < 1e-12);
+      if (i) assert.equal(layout.intervals[i - 1].end, layout.intervals[i].start, 'orbit chapter intervals have no gaps or overlaps');
     });
+    if (count) {
+      assert.equal(layout.intervals[0].start, .565);
+      assert.equal(layout.intervals.at(-1).end, .83);
+    } else assert.deepEqual(layout.intervals, []);
     assert.equal(projectAtProgress(layout, -5), count ? 0 : null);
     assert.equal(projectAtProgress(layout, 9), count ? count - 1 : null);
     assert.equal(projectAtProgress(layout, NaN), count ? 0 : null);

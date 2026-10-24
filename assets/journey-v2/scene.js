@@ -23,10 +23,10 @@ const path = [
   { p: .65, eye: [47, 9, 230], look: [47, 9, -8], earth: [38, 0, -8], scale: .18 },
   { p: .74, eye: [47, 9, 230], look: [47, 9, -8], earth: [38, 0, -8], scale: .18 },
   { p: .83, eye: [47, 9, 230], look: [47, 9, -8], earth: [38, 0, -8], scale: .18 },
-  { p: .89, eye: [1, 28, 71], look: [0, 3, 0], earth: [0, 0, 0], scale: 1 },
+  { p: .90, eye: [47, 9, 230], look: [47, 9, -8], earth: [38, 0, -8], scale: .18 },
   { p: .922, eye: [7, 20, 43], look: [1, 7, 0], earth: [0, 0, 0], scale: 1 },
-  { p: .939, eye: [11, 16, 30], look: [3, 9, 0], earth: [0, 0, 0], scale: 1 },
-  { p: .943, eye: [35, -82, 47], look: [-5, -118, 0], earth: [0, 0, 0], scale: 1 },
+  { p: .93, eye: [11, 16, 30], look: [3, 9, 0], earth: [0, 0, 0], scale: 1 },
+  { p: .94, eye: [35, -82, 47], look: [-5, -118, 0], earth: [0, 0, 0], scale: 1 },
   { p: .973, eye: [30, -94, 37], look: [-5, -118, 0], earth: [0, 0, 0], scale: 1 },
   { p: 1, eye: [30, -94, 37], look: [-5, -118, 0], earth: [0, 0, 0], scale: 1 },
 ];
@@ -168,7 +168,54 @@ export class JourneyScene {
     this.solar.position.set(-18, 0, -8);
     this.scene.add(this.solar);
     this.solarMaterials = [];
-    const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffd8a0, transparent: true });
+    const sunMaterial = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 }, uOpacity: { value: 1 } },
+      transparent: true,
+      vertexShader: `
+        varying vec3 vPosition;
+        varying vec3 vNormal;
+        void main() {
+          vPosition = position;
+          vNormal = normalize(normalMatrix * normal);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        uniform float uOpacity;
+        varying vec3 vPosition;
+        varying vec3 vNormal;
+        float hash3(vec3 p) {
+          p = fract(p * 0.1031);
+          p += dot(p, p.yxz + 33.33);
+          return fract((p.x + p.y) * p.z);
+        }
+        float noise3(vec3 p) {
+          vec3 i = floor(p);
+          vec3 f = fract(p);
+          vec3 u = f * f * (3.0 - 2.0 * f);
+          return mix(
+            mix(mix(hash3(i), hash3(i + vec3(1.0, 0.0, 0.0)), u.x),
+                mix(hash3(i + vec3(0.0, 1.0, 0.0)), hash3(i + vec3(1.0, 1.0, 0.0)), u.x), u.y),
+            mix(mix(hash3(i + vec3(0.0, 0.0, 1.0)), hash3(i + vec3(1.0, 0.0, 1.0)), u.x),
+                mix(hash3(i + vec3(0.0, 1.0, 1.0)), hash3(i + vec3(1.0, 1.0, 1.0)), u.x), u.y), u.z);
+        }
+        void main() {
+          vec3 p = normalize(vPosition);
+          float t = uTime * 0.16;
+          float field = noise3(p * 4.2 + vec3(t, -t * 0.6, t * 0.35)) * 0.68
+            + noise3(p * 9.0 + vec3(-t * 0.45, t * 0.3, 0.0)) * 0.32;
+          float heat = smoothstep(0.22, 0.78, field);
+          float veins = smoothstep(0.70, 0.94, field + noise3(p * 15.0 + vec3(t * 0.5)) * 0.12);
+          vec3 color = mix(vec3(0.16, 0.008, 0.002), vec3(0.95, 0.16, 0.012), heat);
+          color = mix(color, vec3(1.0, 0.76, 0.20), veins * 0.78);
+          float rim = pow(1.0 - abs(vNormal.z), 2.0);
+          color += rim * vec3(0.16, 0.025, 0.002);
+          gl_FragColor = vec4(color, uOpacity);
+        }
+      `,
+    });
+    this.solarSunMaterial = sunMaterial;
     this.solarMaterials.push(sunMaterial);
     this.solarSun = new THREE.Mesh(new THREE.SphereGeometry(6.5, 40, 24), sunMaterial);
     this.solar.add(this.solarSun);
@@ -464,13 +511,13 @@ export class JourneyScene {
     this.earth.group.position.fromArray(from.earth).lerp(new THREE.Vector3(...to.earth), t);
     this.earth.group.scale.setScalar(lerp(from.scale, to.scale, t));
     if (this.mobile) {
-      if (p < .935) {
+      if (p < .90) {
         const about = smooth(.19, .265, p) * (1 - smooth(.40, .55, p));
         this.camera.position.z += about * 20;
         this.look.x = this.look.x * (1 - about) + about * 3;
         this.look.y += about * 6;
       } else {
-        const amount = smooth(.939, .97, p);
+        const amount = smooth(.90, .94, p);
         this.camera.position.x += amount * 11;
         this.camera.position.y += amount * 9;
         this.camera.position.z += amount * 24;
@@ -478,13 +525,13 @@ export class JourneyScene {
         this.look.y += amount * 14;
       }
     }
-    const solar = smooth(.48, .57, p) * (1 - smooth(.83, .89, p));
+    const solar = smooth(.48, .57, p) * (1 - smooth(.90, .94, p));
     const stacked = this.mobile && this.height > 500;
-    const radiusPixels = stacked ? Math.min(this.width * .31, this.height * .145) : Math.min(this.width * .205, this.height * .34);
+    const radiusPixels = stacked ? Math.min(this.width * .31, this.height * .145) : Math.min(this.width * .205, this.height * .25);
     const halfHeight = 62.4 * this.height / (2 * radiusPixels);
     const distance = halfHeight / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
-    const solarX = stacked ? -18 : -18 + halfHeight * this.camera.aspect * .45;
-    const solarY = halfHeight * (stacked ? -.44 : .10);
+    const solarX = stacked ? -18 : -18 + halfHeight * this.camera.aspect * .5;
+    const solarY = halfHeight * (stacked ? -.44 : 0);
     this.camera.position.lerp(new THREE.Vector3(solarX, solarY, -8 + distance), solar);
     this.look.lerp(new THREE.Vector3(solarX, solarY, -8), solar);
     this.orbitLabelOffset = Math.min(stacked ? 42 : 58, radiusPixels * .45);
@@ -506,16 +553,17 @@ export class JourneyScene {
       p = p < .1 ? 0 : p < .22 ? .17 : p < .48 ? .31 : p < .83 ? .64 : p < .94 ? .89 : .99;
     }
     this.updateCamera(p);
-    const orbitMorph = smooth(.48, .57, p) * (1 - smooth(.83, .89, p));
+    const orbitMorph = smooth(.48, .57, p) * (1 - smooth(.90, .94, p));
     const orbitScale = lerp(1, .65, orbitMorph);
-    this.solar.scale.setScalar(orbitScale);
+    const stacked = this.mobile && this.height > 500;
+    this.solar.scale.set(orbitScale * (stacked ? 1 : .8 * this.width / this.height), orbitScale, orbitScale);
     this.solar.rotation.x = orbitMorph * Math.PI / 2;
     this.earth.group.position.sub(this.solar.position).multiplyScalar(orbitScale).applyAxisAngle(new THREE.Vector3(1, 0, 0), this.solar.rotation.x).add(this.solar.position);
     this.earth.group.scale.multiplyScalar(orbitScale);
     this.updateStars(p, this.time);
-    this.earth.group.visible = p >= .155 && p < .941;
+    this.earth.group.visible = p >= .155 && p < .94;
     this.earth.update(this.time, smooth(.25, .52, p), this.reducedMotion);
-    const solarOpacity = smooth(.40, .55, p) * (1 - smooth(.83, .90, p));
+    const solarOpacity = smooth(.40, .55, p) * (1 - smooth(.90, .94, p));
     this.solarOpacity = solarOpacity;
     this.solar.visible = solarOpacity > .001;
     this.solarMaterials.forEach(material => { material.opacity = material.userData.baseOpacity * solarOpacity; });
@@ -532,17 +580,19 @@ export class JourneyScene {
     });
     this.city.group.visible = p > .938;
     if (this.city.group.visible) this.city.update(this.time, this.reducedMotion);
-    const cityBlend = smooth(.922, .946, p);
+    const cityBlend = smooth(.90, .94, p);
     this.scene.background.set(0x050711).lerp(new THREE.Color(0xbccfcf), cityBlend);
     this.distantStars.visible = cityBlend < .999;
     this.distantStars.material.opacity = .66 * (1 - cityBlend);
-    this.cloudCover = smooth(.885, .936, p) * (1 - smooth(.945, .976, p));
+    this.cloudCover = smooth(.90, .94, p) * (1 - smooth(.94, .976, p));
     this.cloudPass.visible = this.cloudCover > .001;
     this.cloudMaterial.uniforms.uCover.value = this.cloudCover;
     this.cloudMaterial.uniforms.uTime.value = this.time;
     this.updateProjectFocus(now);
+    this.solarSunMaterial.uniforms.uTime.value = this.reducedMotion ? 0 : this.time;
+    this.solarSunMaterial.uniforms.uOpacity.value = this.solarSunMaterial.opacity;
     this.renderer.render(this.scene, this.camera);
-    this.container.dataset.world = p < .10 ? 'hello' : p < .22 ? 'descent' : p < .48 ? 'earth' : p < .83 ? 'solar' : p < .94 ? 'return' : 'city';
+    this.container.dataset.world = p < .10 ? 'hello' : p < .22 ? 'descent' : p < .48 ? 'earth' : p < .90 ? 'solar' : p < .94 ? 'return' : 'city';
     this.onProgress(this.progress);
     this.dirty = false;
   }

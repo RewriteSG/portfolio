@@ -26,9 +26,9 @@ for (const [projectCount, orbitCount] of [[0, 0], [5, 2], [3, 3], [64, 33]]) {
       assert.equal(item.counter, `${String(index + 1).padStart(2,'0')} / ${String(orbitCount).padStart(2,'0')}`);
       assert.equal(item.previousId, index > 0 ? featured[index - 1].id : null);
       assert.equal(item.nextId, index + 1 < orbitCount ? featured[index + 1].id : null);
-      assert.equal(item.start, .565 + (index / orbitCount) * .252);
-      assert.equal(item.end, .565 + ((index + 1) / orbitCount) * .252);
-      assert.equal(item.progress, .565 + ((index + .5) / orbitCount) * .252);
+      assert.equal(item.start, .565 + (index / orbitCount) * .265);
+      assert.equal(item.end, .565 + ((index + 1) / orbitCount) * .265);
+      assert.equal(item.progress, .565 + ((index + .5) / orbitCount) * .265);
       assert.ok(item.fade > 0 && item.fade <= (item.end - item.start) / 4);
       assert.ok(item.progress - item.start >= item.fade);
       assert.ok(item.end - item.progress >= item.fade);

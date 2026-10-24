@@ -36,7 +36,9 @@ try {
       window.__journeyScene && window.__journeyProjects && document.activeElement?.id === 'projects'
       && !document.body.classList.contains('preflight-pending'));
     assert.ok(await delayedManifestPage.locator('#projects').isVisible(), 'successful preflight should honor the direct Projects hash');
-    console.log('PASS delayed manifest keeps the direct Projects hash at the top of the index');
+    const directProjectsProgress = await delayedManifestPage.evaluate(() => window.__journeyScene.getDebugState().targetProgress);
+    assert.ok(Math.abs(directProjectsProgress - .83) < .0001, `direct #projects navigation starts the catalog at .83, received ${directProjectsProgress}`);
+    console.log('PASS delayed manifest keeps the direct Projects hash at the .83 catalog-stage start');
   } finally {
     await delayedManifestPage.close();
   }

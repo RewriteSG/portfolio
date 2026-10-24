@@ -15,6 +15,7 @@ try {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/projects.json', route => route.fulfill({json:fixture(width < 500 ? 64 : 8)}));
+    await page.route('**/assets/journey-v2/settings.json', route => route.fulfill({json:{orbitCount:width < 500 ? 64 : 1}}));
     await page.goto(`${base}#journey-project-Access_0`);
     await ready(page);
     await page.waitForFunction(() => document.activeElement?.id === 'journey-project-Access_0');
@@ -103,6 +104,7 @@ try {
   // A condensed list keeps every real HTML control reachable and scrolls focus into view.
   const many = await browser.newPage({viewport:{width:360,height:800}});
   await many.route('**/projects.json', route => route.fulfill({json:fixture(64)}));
+  await many.route('**/assets/journey-v2/settings.json', route => route.fulfill({json:{orbitCount:64}}));
   await many.goto(`${base}#journey-project-Access_0`);
   await ready(many);
   await many.waitForFunction(() => document.querySelector('#orbit-control.is-list'));

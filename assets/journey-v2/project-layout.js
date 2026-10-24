@@ -1,6 +1,6 @@
 const START = .565;
-const SPAN = .252;
-const END = .817;
+const SPAN = .265;
+const END = .83;
 const clamp = value => Math.max(0, Math.min(1, Number.isNaN(value) ? 0 : value));
 
 /** Stable positions and colors, independent of rendering and the browser. */
@@ -20,7 +20,17 @@ export function buildProjectLayout(projectIds = []) {
     const end = START + ((index + 1) / count) * SPAN;
     return {start, end, progress:stops[index], fade:Math.min(.012, (end - start) / 4)};
   });
-  const layout = {ids, stops, intervals, chapterStart:START, chapterEnd:END};
+  const layout = {
+    ids,
+    stops,
+    intervals,
+    chapterStart:START,
+    chapterEnd:END,
+    projectsStageStart:count ? END : .535,
+    projectsStageEnd:.90,
+    returnStart:.90,
+    returnEnd:.94,
+  };
   const markerCount = Math.min(32, count);
   layout.markers = Array.from({length:markerCount}, (_, index) => projectOrbit(layout, Math.floor(index * count / markerCount)));
   layout.needsActiveMarker = count > 32;
