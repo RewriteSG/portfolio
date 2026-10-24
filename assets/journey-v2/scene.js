@@ -169,7 +169,7 @@ export class JourneyScene {
     this.scene.add(this.solar);
     this.solarMaterials = [];
     const sunMaterial = new THREE.ShaderMaterial({
-      uniforms: { uTime: { value: 0 }, uOpacity: { value: 1 } },
+      uniforms: { uTime: { value: 0 }, uOpacity: { value: 1 }, uReveal: { value: 0 } },
       transparent: true,
       vertexShader: `
         varying vec3 vPosition;
@@ -183,6 +183,7 @@ export class JourneyScene {
       fragmentShader: `
         uniform float uTime;
         uniform float uOpacity;
+        uniform float uReveal;
         varying vec3 vPosition;
         varying vec3 vNormal;
         float hash3(vec3 p) {
@@ -205,12 +206,18 @@ export class JourneyScene {
           float t = uTime * 0.16;
           float field = noise3(p * 4.2 + vec3(t, -t * 0.6, t * 0.35)) * 0.68
             + noise3(p * 9.0 + vec3(-t * 0.45, t * 0.3, 0.0)) * 0.32;
-          float heat = smoothstep(0.22, 0.78, field);
-          float veins = smoothstep(0.70, 0.94, field + noise3(p * 15.0 + vec3(t * 0.5)) * 0.12);
-          vec3 color = mix(vec3(0.16, 0.008, 0.002), vec3(0.95, 0.16, 0.012), heat);
-          color = mix(color, vec3(1.0, 0.76, 0.20), veins * 0.78);
+          float gold = smoothstep(0.18, 0.84, field);
+          float reveal = smoothstep(0.02, 0.92, uReveal);
+          vec3 color = mix(vec3(0.90, 0.58, 0.025), vec3(1.0, 0.84, 0.31), gold);
+          float molten = smoothstep(0.48, 0.78, field + noise3(p * 15.0 + vec3(t * 0.5)) * 0.12);
+          color = mix(color, vec3(1.0, 0.48, 0.035), molten * reveal * 0.34);
+          float veinNoise = noise3(p * 14.0 + vec3(t * 0.35, -t * 0.2, t * 0.15));
+          float ridge = abs(veinNoise - 0.5);
+          float veins = (1.0 - smoothstep(0.0045, 0.018, ridge)) * smoothstep(0.34, 0.72, field);
+          float veinReveal = smoothstep(0.58, 0.95, uReveal);
+          color = mix(color, vec3(0.96, 0.16, 0.025), veins * veinReveal * 0.92);
           float rim = pow(1.0 - abs(vNormal.z), 2.0);
-          color += rim * vec3(0.16, 0.025, 0.002);
+          color += rim * vec3(0.13, 0.065, 0.008);
           gl_FragColor = vec4(color, uOpacity);
         }
       `,
@@ -525,15 +532,50 @@ export class JourneyScene {
         this.look.y += amount * 14;
       }
     }
-    const solar = smooth(.48, solarIntroEnd, p) * (1 - smooth(.90, .94, p));
+    const returnBlend = smooth(.90, .94, p);
+    const solar = smooth(.48, solarIntroEnd, p) * (1 - returnBlend);
+    const hasOrbit = this.projectLayout.ids.length > 0;
     const stacked = this.mobile && this.height > 500;
     const radiusPixels = stacked ? Math.min(this.width * .31, this.height * .145) : Math.min(this.width * .205, this.height * .25);
     const halfHeight = 62.4 * this.height / (2 * radiusPixels);
-    const distance = halfHeight / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const overviewDistance = halfHeight / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
     const solarX = stacked ? -18 : -18 + halfHeight * this.camera.aspect * .5;
     const solarY = halfHeight * (stacked ? -.44 : 0);
-    this.camera.position.lerp(new THREE.Vector3(solarX, solarY, -8 + distance), solar);
-    this.look.lerp(new THREE.Vector3(solarX, solarY, -8), solar);
+    const overviewEye = new THREE.Vector3(solarX, solarY, -8 + overviewDistance);
+    const overviewLook = new THREE.Vector3(solarX, solarY, -8);
+
+    const catalogBlend = hasOrbit
+      ? smooth(this.projectLayout.projectsStageStart - .012, this.projectLayout.projectsStageStart, p) * (1 - returnBlend)
+      : solar;
+    const orbitScale = lerp(1, .65, solar);
+    const subjectWidth = stacked ? this.width * .5 : this.width * .5 - Math.min(24, this.width * .04) * 2;
+    const sunDiameter = Math.max(1, Math.min(this.height * .30, subjectWidth));
+    const sunRadius = this.solarSun.geometry.parameters.radius * orbitScale * this.solarSun.scale.y;
+    const fovTangent = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const catalogDistance = sunRadius * this.height / (sunDiameter * fovTangent);
+    const sunCenter = this.solar.position.clone().add(this.solarSun.position);
+    const centerX = stacked ? this.width * .5 : this.width * .25;
+    const centerY = stacked ? this.height * .24 : this.height * .5;
+    const ndcX = centerX / this.width * 2 - 1;
+    const ndcY = 1 - centerY / this.height * 2;
+    const catalogLook = new THREE.Vector3(
+      sunCenter.x - ndcX * catalogDistance * fovTangent * this.camera.aspect,
+      sunCenter.y - ndcY * catalogDistance * fovTangent,
+      sunCenter.z,
+    );
+    const catalogEye = catalogLook.clone().add(new THREE.Vector3(0, 0, catalogDistance));
+
+    if (hasOrbit) {
+      this.camera.position.lerp(overviewEye, solar);
+      this.look.lerp(overviewLook, solar);
+      this.camera.position.lerp(catalogEye, catalogBlend);
+      this.look.lerp(catalogLook, catalogBlend);
+    } else {
+      this.camera.position.lerp(catalogEye, solar);
+      this.look.lerp(catalogLook, solar);
+    }
+    this.catalogZoom = catalogBlend;
+    this.solarReveal = catalogBlend;
     this.orbitLabelOffset = Math.min(stacked ? 42 : 58, radiusPixels * .45);
     this.camera.lookAt(this.look);
   }
@@ -550,14 +592,21 @@ export class JourneyScene {
     this.time += this.reducedMotion ? 0 : delta;
     let p = this.progress;
     if (this.reducedMotion) {
-      p = p < .1 ? 0 : p < .22 ? .17 : p < .48 ? .31 : p < .83 ? .64 : p < .94 ? .89 : .99;
+      const catalogEntry = this.projectLayout.projectsStageStart;
+      p = p < .1 ? 0 : p < .22 ? .17 : p < .48 ? .31
+        : !this.projectLayout.ids.length && p < catalogEntry ? p
+          : p < catalogEntry - .012 ? .64
+            : p < .94 ? .89 : .99;
     }
-    const solarIntroEnd = Math.min(.57, this.projectLayout.projectsStageStart);
+    const solarIntroEnd = this.projectLayout.ids.length
+      ? this.projectLayout.chapterStart
+      : this.projectLayout.projectsStageStart;
     this.updateCamera(p, solarIntroEnd);
     const orbitMorph = smooth(.48, solarIntroEnd, p) * (1 - smooth(.90, .94, p));
     const orbitScale = lerp(1, .65, orbitMorph);
     const stacked = this.mobile && this.height > 500;
-    this.solar.scale.set(orbitScale * (stacked ? 1 : .8 * this.width / this.height), orbitScale, orbitScale);
+    const aspectScale = stacked ? 1 : .8 * this.width / this.height;
+    this.solar.scale.set(orbitScale * lerp(aspectScale, 1, this.catalogZoom), orbitScale, orbitScale);
     this.solar.rotation.x = orbitMorph * Math.PI / 2;
     this.earth.group.position.sub(this.solar.position).multiplyScalar(orbitScale).applyAxisAngle(new THREE.Vector3(1, 0, 0), this.solar.rotation.x).add(this.solar.position);
     this.earth.group.scale.multiplyScalar(orbitScale);
@@ -592,6 +641,7 @@ export class JourneyScene {
     this.cloudMaterial.uniforms.uTime.value = this.time;
     this.updateProjectFocus(now);
     this.solarSunMaterial.uniforms.uTime.value = this.reducedMotion ? 0 : this.time;
+    this.solarSunMaterial.uniforms.uReveal.value = this.solarReveal;
     this.solarSunMaterial.uniforms.uOpacity.value = this.solarSunMaterial.opacity;
     this.renderer.render(this.scene, this.camera);
     this.container.dataset.world = p < .10 ? 'hello' : p < .22 ? 'descent' : p < .48 ? 'earth' : p < .90 ? 'solar' : p < .94 ? 'return' : 'city';
