@@ -1,5 +1,6 @@
 import { loadProjectManifest, resolveProjectMedia, safeEmail, safeHttpUrl } from './project-data.js';
 import { buildProjectPresentation } from './project-presentation.js';
+import { createProjectCatalog } from './project-catalog.js';
 import { buildProjectLayout, projectAtProgress, buildScrollMetrics, progressAtScroll, scrollAtProgress, sceneScrollRange } from './project-layout.js';
 import { createProjectPages, renderProjectChapters } from './project-pages.js';
 import { JourneySettingsError, validateJourneySettings } from './settings.js';
@@ -38,6 +39,7 @@ let pendingFocus;
 let lastSceneLabel = '';
 let lastActive = '';
 let projectPages;
+let projectCatalog;
 let focusedProjectId = null;
 let restoredProjectHash = null;
 let restoringFocusPanel = null;
@@ -120,7 +122,7 @@ const projectMount = document.querySelector('#project-mount');
 projectMount.className = 'project-mount';
 projectMount.removeAttribute('aria-live');
 projectSection.after(projectMount);
-projectSection.querySelector('.project-preview').remove();
+projectSection.querySelector('.project-preview')?.remove();
 projectSection.classList.remove('project-panel');
 projectSection.classList.add('project-index');
 const projectsHeading = document.querySelector('#projects-heading');
@@ -129,8 +131,8 @@ const projectStatus = projectSection.querySelector('.body-copy');
 projectStatus.setAttribute('role', 'status');
 projectStatus.id = 'projects-status';
 const projectJumpList = textElement('nav', 'project-jump-list', '');
-projectJumpList.setAttribute('aria-label', 'Browse projects');
-projectStatus.after(projectJumpList);
+projectJumpList.setAttribute('aria-label', 'Browse featured project chapters');
+projectSection.querySelector('#project-catalog').after(projectJumpList);
 
 function showProjectStatus(message) {
   projectStatus.textContent = message;
@@ -142,6 +144,7 @@ function loadProjects({projects, rejected}, orbitCount) {
   const wasAtProjectsAnchor = requestedHash === 'projects'
     && Math.abs((scene?.targetProgress ?? progressAtScroll(scrollMetrics, scrollY)) - anchors.projects) < .012;
   projectPages?.destroy();
+  projectCatalog?.destroy();
   projectPresentation = buildProjectPresentation(projects, orbitCount);
   renderProjectChapters({presentation:projectPresentation, mount:projectMount, controls:document.querySelector('#orbit-stops'), indexControls:projectJumpList, resolveMedia:resolveProjectMedia});
   projectIds.splice(1, projectIds.length, ...projectPresentation.chapters.map(item => item.targetId));
@@ -155,7 +158,7 @@ function loadProjects({projects, rejected}, orbitCount) {
     anchors[item.targetId] = panel ? panelContentRange(panel).start : item.progress;
   });
   ringStops = [...document.querySelectorAll('.orbit-stop')];
-  body.classList.toggle('has-many-projects', projects.length > 32);
+  body.classList.toggle('has-many-projects', projectPresentation.orbitCount > 32);
   const summary = projects.length ? `${projects.length} ${projects.length === 1 ? 'project' : 'projects'} to explore.` : 'No projects to show yet.';
   showProjectStatus(`${summary}${rejected ? ` ${rejected} invalid ${rejected === 1 ? 'entry was' : 'entries were'} skipped.` : ''}`);
   projectPages = createProjectPages({projects, presentation:projectPresentation, resolveMedia:resolveProjectMedia,
@@ -181,7 +184,11 @@ function loadProjects({projects, rejected}, orbitCount) {
       if (direct) goTo('projects', {instant:true, updateHash:false});
     },
   });
-  window.__journeyProjects = {presentation:projectPresentation, pages:projectPages};
+  projectCatalog = createProjectCatalog({root:projectSection, projects, resolveMedia:resolveProjectMedia,
+    onOpen:(project, invoker) => projectPages.open(project.id, {invoker}),
+    onPageChange:() => scheduleScrollUpdate({measure:true, preserve:true}),
+  });
+  window.__journeyProjects = {presentation:projectPresentation, pages:projectPages, catalog:projectCatalog};
   document.dispatchEvent(new CustomEvent('journey:projects-ready', {detail:{presentation:projectPresentation, projects, wasAtProjectsAnchor}}));
   measure();
   projectPages.syncFromLocation();

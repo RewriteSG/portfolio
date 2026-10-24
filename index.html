@@ -48,10 +48,20 @@
 
     <div class="scene-panel solar-intro" data-start="0.49" data-end="0.535" aria-hidden="true"><p class="section-label">Selected studies</p><p>A few ideas.<br>A wider orbit.</p><span>Projects shaped by curiosity.</span></div>
 
-    <section id="projects" class="scene-panel project-panel" data-start="0.565" data-end="0.83" aria-labelledby="projects-heading" tabindex="-1">
-      <div class="project-preview"><div class="project-preview-stage" id="project-mount" aria-live="polite"></div></div>
-      <div class="project-copy"><p class="section-label">Selected projects</p><h2 id="projects-heading">Projects</h2><p class="project-premise">A few ideas.<br>A wider orbit.</p><p class="body-copy">Explore selected projects and the questions behind them.</p></div>
+    <section id="projects" class="scene-panel project-index" data-start="0.565" data-end="0.83" aria-labelledby="projects-heading" tabindex="-1">
+      <div class="project-copy project-catalog-heading"><p class="section-label">Browse the portfolio</p><h2 id="projects-heading">My projects</h2><p class="body-copy">Explore the full project catalog. Choose a project to read its story.</p></div>
+      <div id="project-catalog" class="project-catalog">
+        <div id="project-catalog-grid" class="project-catalog-grid"></div>
+        <nav id="project-catalog-pager" class="project-catalog-pager" aria-label="Project pages" hidden>
+          <button id="project-catalog-previous" type="button" aria-label="Previous page" aria-controls="project-catalog-grid">Previous</button>
+          <span id="project-catalog-page-number" aria-label="No project pages">00 / 00</span>
+          <button id="project-catalog-next" type="button" aria-label="Next page" aria-controls="project-catalog-grid">Next</button>
+        </nav>
+        <p id="project-catalog-page-status" class="project-catalog-page-status" role="status" aria-live="polite" aria-atomic="true"></p>
+      </div>
     </section>
+
+    <div id="project-mount" class="project-mount"></div>
 
     <div class="scene-panel return-message" data-start="0.85" data-end="0.93" aria-hidden="true"><p>Back to earth.</p><span>Every good conversation starts somewhere.</span></div>
 
