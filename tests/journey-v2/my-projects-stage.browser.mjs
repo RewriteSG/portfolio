@@ -49,6 +49,14 @@ function readStageState(page) {
   });
 }
 
+function readCatalogVisibility(page) {
+  return page.locator('#projects').evaluate(node => ({
+    opacity:Number(getComputedStyle(node).opacity),
+    inert:node.inert,
+    ariaHidden:node.getAttribute('aria-hidden'),
+  }));
+}
+
 async function setStageProgress(page, progress) {
   await page.evaluate(progress => {
     const scene = window.__journeyScene;
@@ -186,6 +194,11 @@ try {
       && bounds.right >= 1440 * .43 && bounds.right <= 1440 * .47, `wide solar bounds sit around x=5–45vw: ${JSON.stringify(bounds)}`);
     assert.ok(bounds.top >= 900 * .22 && bounds.top <= 900 * .28
       && bounds.bottom >= 900 * .72 && bounds.bottom <= 900 * .78, `wide solar bounds sit around y=25–75vh: ${JSON.stringify(bounds)}`);
+    // Keep the focused-panel accessibility override from masking its visual exit timing.
+    await page.locator('.main-nav a[href="#about"]').focus();
+    await setStageProgress(page, .895);
+    const beforeReturn = await readCatalogVisibility(page);
+    assert.deepEqual(beforeReturn, {opacity:1, inert:false, ariaHidden:'false'}, 'catalog remains fully visible and interactive through .895');
     const steadyEnd = await setStageProgress(page, .899);
     assert.deepEqual(steadyEnd.camera, beforePageChange.camera, 'camera remains fixed throughout the catalog stage');
     assert.deepEqual(steadyEnd.solarScale, beforePageChange.solarScale, 'Sun scale remains fixed throughout the catalog stage');
@@ -195,11 +208,17 @@ try {
     assert.deepEqual(returnStart.camera, beforePageChange.camera, 'the return begins without a camera jump at .90');
     assert.deepEqual(returnStart.solarScale, beforePageChange.solarScale, 'the return begins without a scale jump at .90');
     assert.ok(returnStart.sunOpacity > .999, 'Sun opacity remains full at the return boundary');
+    assert.deepEqual(await readCatalogVisibility(page), {opacity:1, inert:false, ariaHidden:'false'}, 'catalog remains visible and interactive at the .90 return boundary');
     const returning = await setStageProgress(page, .92);
     assert.notDeepEqual(returning.camera, beforePageChange.camera, 'camera movement occurs inside .90–.94');
     assert.ok(returning.sunOpacity > .35 && returning.sunOpacity < .65, 'Sun fades inside .90–.94');
+    const catalogReturning = await readCatalogVisibility(page);
+    assert.ok(catalogReturning.opacity > .35 && catalogReturning.opacity < .65, `catalog exit begins during .90–.94: ${JSON.stringify(catalogReturning)}`);
+    assert.equal(catalogReturning.inert, false, 'catalog remains interactive while it is visibly returning');
+    assert.equal(catalogReturning.ariaHidden, 'false');
     const returned = await setStageProgress(page, .94);
     assert.ok(returned.sunOpacity < .001, 'Sun is faded by the end of the return interval');
+    assert.deepEqual(await readCatalogVisibility(page), {opacity:0, inert:true, ariaHidden:'true'}, 'catalog is hidden after the return completes');
 
     const beforeLocal = await setStageProgress(page, .86);
     const beforeTrackHeight = await page.locator('#journey-track').evaluate(track => track.offsetHeight);

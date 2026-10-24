@@ -478,7 +478,9 @@ function updatePresentation(progress) {
     const end = Number(panel.dataset.end);
     const fade = panelFade(panel);
     const entry = panel.id === 'projects' ? (p >= start - .00002 ? 1 : 0) : start === 0 ? 1 : smooth((p - start) / fade);
-    const exit = end === 1 ? 1 : 1 - smooth((p - (end - fade)) / fade);
+    const exit = panel.id === 'projects'
+      ? 1 - smooth((p - projectLayout.returnStart) / (projectLayout.returnEnd - projectLayout.returnStart))
+      : end === 1 ? 1 : 1 - smooth((p - (end - fade)) / fade);
     const opacity = entry * exit;
     const visible = opacity > .006;
     panel.classList.toggle('is-active', visible);
