@@ -230,15 +230,27 @@ const contentObserver = new ResizeObserver(entries => {
   });
   if (changed) scheduleScrollUpdate({measure:true, preserve:true});
 });
-panels.forEach(panel => contentObserver.observe(panel));
-document.addEventListener('load', event => {
-  if (event.target instanceof HTMLImageElement && event.target.closest('#portfolio')) scheduleScrollUpdate({measure:true, preserve:true});
-}, true);
+function observePanelContent() {
+  panels.forEach(panel => {
+    contentObserver.observe(panel);
+    // The panel's fixed visual box does not grow with its scrollable contents.
+    // Its intrinsic copy/preview children do, including text and media changes.
+    [...panel.children].forEach(content => contentObserver.observe(content));
+  });
+}
+observePanelContent();
+function refreshMediaLayout(event) {
+  if ((event.target instanceof HTMLImageElement || event.target instanceof HTMLMediaElement) && event.target.closest('#portfolio')) {
+    scheduleScrollUpdate({measure:true, preserve:true});
+  }
+}
+document.addEventListener('load', refreshMediaLayout, true);
+document.addEventListener('loadedmetadata', refreshMediaLayout, true);
 document.addEventListener('journey:projects-ready', event => {
   projectLayout = buildProjectLayout(event.detail.presentation.chapters.map(item => item.id));
   scene?.setProjectIds(projectLayout.ids);
   contentObserver.disconnect();
-  panels.forEach(panel => contentObserver.observe(panel));
+  observePanelContent();
   measure(true);
   sizeProjectPreviews();
   const requested = location.hash.slice(1);
