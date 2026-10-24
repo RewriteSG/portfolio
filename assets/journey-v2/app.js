@@ -1,6 +1,6 @@
 import { loadProjectManifest, resolveProjectMedia, safeEmail, safeHttpUrl } from './project-data.js';
 import { buildProjectPresentation } from './project-presentation.js';
-import { buildProjectLayout, projectAtProgress, buildScrollMetrics, progressAtScroll, scrollAtProgress } from './project-layout.js';
+import { buildProjectLayout, projectAtProgress, buildScrollMetrics, progressAtScroll, scrollAtProgress, sceneScrollRange } from './project-layout.js';
 import { createProjectPages, renderProjectChapters } from './project-pages.js';
 
 const body = document.body;
@@ -16,7 +16,7 @@ const menu = document.querySelector('#more-menu');
 const menuButton = document.querySelector('#menu-toggle');
 const readingButton = document.querySelector('#reading-toggle');
 const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
-const anchors = {hello:0, about:.30, projects:.59, contact:1};
+const anchors = {hello:0, about:.245, projects:.577, contact:.955};
 const projectIds = ['projects'];
 let scene;
 let previousProgress = -1;
@@ -142,15 +142,22 @@ async function loadProjects() {
   showProjectStatus('Loading projects…');
   try {
     const {projects, rejected} = await loadProjectManifest();
+    const requestedHash = location.hash.slice(1);
+    const wasAtProjectsAnchor = requestedHash === 'projects'
+      && Math.abs((scene?.targetProgress ?? progressAtScroll(scrollMetrics, scrollY)) - anchors.projects) < .012;
     projectPages?.destroy();
     projectPresentation = buildProjectPresentation(projects);
     renderProjectChapters({presentation:projectPresentation, mount:projectMount, controls:document.querySelector('#orbit-stops'), indexControls:projectJumpList, resolveMedia:resolveProjectMedia});
     projectIds.splice(1, projectIds.length, ...projectPresentation.chapters.map(item => item.targetId));
-    projectPresentation.chapters.forEach(item => { anchors[item.targetId] = item.progress; });
-    anchors.projects = projects.length ? .55 : .59;
     projectSection.dataset.end = projects.length ? '.565' : '.83';
     projectSection.dataset.start = projects.length ? '.535' : '.565';
     panels = [...document.querySelectorAll('.scene-panel')];
+    refreshStaticSectionAnchors();
+    anchors.projects = panelContentRange(projectSection).start;
+    projectPresentation.chapters.forEach(item => {
+      const panel = panels.find(candidate => candidate.id === item.targetId);
+      anchors[item.targetId] = panel ? panelContentRange(panel).start : item.progress;
+    });
     ringStops = [...document.querySelectorAll('.orbit-stop')];
     body.classList.toggle('has-many-projects', projects.length > 32);
     const summary = projects.length ? `${projects.length} ${projects.length === 1 ? 'project' : 'projects'} to explore.` : 'No projects to show yet.';
@@ -179,7 +186,7 @@ async function loadProjects() {
       },
     });
     window.__journeyProjects = {presentation:projectPresentation, pages:projectPages};
-    document.dispatchEvent(new CustomEvent('journey:projects-ready', {detail:{presentation:projectPresentation, projects}}));
+    document.dispatchEvent(new CustomEvent('journey:projects-ready', {detail:{presentation:projectPresentation, projects, wasAtProjectsAnchor}}));
     measure();
     projectPages.syncFromLocation();
   } catch (error) {
@@ -194,6 +201,67 @@ const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const smooth = t => { t = clamp(t); return t * t * (3 - 2 * t); };
 const prefersReducedMotion = () => motionPreference.matches;
 
+function panelFade(panel) {
+  const start = Number(panel.dataset.start);
+  const end = Number(panel.dataset.end);
+  const configured = Number(panel.dataset.fade) || (panel.id === 'about' ? .025 : panel.id === 'contact' ? .027 : .012);
+  return Number.isFinite(start) && Number.isFinite(end) && end > start
+    ? Math.min(configured, (end - start) / 4)
+    : configured;
+}
+
+function panelContentRange(panel) {
+  return sceneScrollRange(Number(panel.dataset.start), Number(panel.dataset.end), panelFade(panel));
+}
+
+function refreshStaticSectionAnchors() {
+  ['about', 'contact'].forEach(id => {
+    const panel = panels.find(candidate => candidate.id === id);
+    if (panel) anchors[id] = panelContentRange(panel).start;
+  });
+}
+refreshStaticSectionAnchors();
+
+function syncSceneContent(scrollPosition = scrollY) {
+  if (!body.classList.contains('has-journey')) return;
+  panels.forEach(panel => {
+    const overflow = Math.max(0, panel.scrollHeight - panel.clientHeight);
+    if (!overflow) {
+      if (panel.scrollTop) panel.scrollTop = 0;
+      return;
+    }
+    const range = panelContentRange(panel);
+    const from = scrollAtProgress(scrollMetrics, range.start);
+    const to = scrollAtProgress(scrollMetrics, range.end);
+    const amount = to > from ? clamp((scrollPosition - from) / (to - from)) * overflow : 0;
+    if (Math.abs(panel.scrollTop - amount) > .5) panel.scrollTop = amount;
+  });
+}
+
+function revealFocusedContent(event) {
+  if (!body.classList.contains('has-journey') || !(event.target instanceof Element)) return;
+  const panel = event.target.closest('.scene-panel');
+  if (!panel || panel.inert) return;
+  const overflow = Math.max(0, panel.scrollHeight - panel.clientHeight);
+  if (!overflow) return;
+  const panelBounds = panel.getBoundingClientRect();
+  const targetBounds = event.target.getBoundingClientRect();
+  const margin = 12;
+  let contentOffset = panel.scrollTop;
+  if (targetBounds.top < panelBounds.top + margin) contentOffset -= panelBounds.top + margin - targetBounds.top;
+  if (targetBounds.bottom > panelBounds.bottom - margin) contentOffset += targetBounds.bottom - panelBounds.bottom + margin;
+  contentOffset = clamp(contentOffset / overflow) * overflow;
+  const range = panelContentRange(panel);
+  const from = scrollAtProgress(scrollMetrics, range.start);
+  const to = scrollAtProgress(scrollMetrics, range.end);
+  const targetScroll = from + (contentOffset / overflow) * (to - from);
+  if (Math.abs(scrollY - targetScroll) > 1) {
+    scrollTo({top:targetScroll, behavior:'instant'});
+    syncSceneContent(targetScroll);
+  }
+}
+document.addEventListener('focusin', revealFocusedContent);
+
 function setMenu(open) {
   const restoreFocus = !open && menu.contains(document.activeElement);
   menu.hidden = !open;
@@ -204,8 +272,14 @@ function setMenu(open) {
 
 function measure(preservePosition = false) {
   const progress = preservePosition && scene ? scene.targetProgress : progressAtScroll(scrollMetrics, scrollY);
-  const contentHeight = panels.reduce((height, panel) => panel.dataset.projectId ? Math.max(height, panel.scrollHeight) : height, 0);
-  scrollMetrics = buildScrollMetrics(projectLayout, innerHeight, contentHeight);
+  const panelMetrics = panels.map(panel => ({
+    start:Number(panel.dataset.start),
+    end:Number(panel.dataset.end),
+    fade:panelFade(panel),
+    overflow:Math.max(0, panel.scrollHeight - panel.clientHeight),
+    minimumDuration:panel.dataset.projectId ? Math.max(640, innerHeight * .9) : 0,
+  }));
+  scrollMetrics = buildScrollMetrics(projectLayout, innerHeight, panelMetrics);
   track.style.height = `${scrollMetrics.total + innerHeight}px`;
   previousProgress = -1;
   if (body.classList.contains('has-journey')) {
@@ -213,6 +287,7 @@ function measure(preservePosition = false) {
     const p = progressAtScroll(scrollMetrics, scrollY);
     scene?.setProgress(p);
     updatePresentation(p);
+    syncSceneContent(scrollY);
   }
 }
 
@@ -229,7 +304,10 @@ function scheduleScrollUpdate({measure:refresh = false, preserve = false} = {}) 
       preserveOnMeasure = false;
       measure(restore);
     }
-    if (body.classList.contains('has-journey')) scene?.setProgress(progressAtScroll(scrollMetrics, scrollY));
+    if (body.classList.contains('has-journey')) {
+      scene?.setProgress(progressAtScroll(scrollMetrics, scrollY));
+      syncSceneContent(scrollY);
+    }
   });
 }
 
@@ -268,7 +346,9 @@ document.addEventListener('journey:projects-ready', event => {
   measure(true);
   sizeProjectPreviews();
   const requested = location.hash.slice(1);
-  if (event.detail.presentation.chapters.some(item => item.targetId === requested)) {
+  if (event.detail.wasAtProjectsAnchor && requested === 'projects') {
+    goTo('projects', {instant:true, updateHash:false, focus:true});
+  } else if (event.detail.presentation.chapters.some(item => item.targetId === requested)) {
     goTo(requested, {instant:true, updateHash:false, focus:true});
   }
 });
@@ -283,6 +363,7 @@ function goTo(id, {focus = false, updateHash = true, instant = false} = {}) {
     if (instant) {
       scene?.setProgress(anchors[id], true);
       updatePresentation(anchors[id]);
+      syncSceneContent(scrollY);
     }
   } else {
     target.scrollIntoView({behavior: instant || prefersReducedMotion() ? 'instant' : 'smooth', block:'start'});
@@ -383,7 +464,7 @@ function updatePresentation(progress) {
   panels.forEach(panel => {
     const start = Number(panel.dataset.start);
     const end = Number(panel.dataset.end);
-    const fade = Number(panel.dataset.fade) || (panel.id === 'about' ? .025 : panel.id === 'contact' ? .027 : .012);
+    const fade = panelFade(panel);
     const entry = start === 0 ? 1 : smooth((p - start) / fade);
     const exit = end === 1 ? 1 : 1 - smooth((p - (end - fade)) / fade);
     const opacity = entry * exit;
@@ -405,7 +486,7 @@ function updatePresentation(progress) {
       else link.removeAttribute('aria-current');
     });
   }
-  if (pendingFocus && active === pendingFocus && Math.abs(p - anchors[pendingFocus]) < .012) {
+  if (pendingFocus && active === pendingFocus && highestOpacity >= .35 && Math.abs(p - anchors[pendingFocus]) < .012) {
     document.getElementById(pendingFocus).focus({preventScroll:true});
     pendingFocus = undefined;
   }

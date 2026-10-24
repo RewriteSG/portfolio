@@ -51,7 +51,7 @@ try {
     await page.waitForFunction(() => !document.querySelector('dialog').open && document.activeElement?.classList.contains('project-view-more'));
     for (const id of ['about','contact']) {
       await page.evaluate(id => {location.hash=id;},id);
-      await page.waitForFunction(id => document.activeElement.id === id && Number(document.querySelector(`#${id}`).style.opacity) === 1,id);
+      await page.waitForFunction(id => document.activeElement.id === id && Number(document.querySelector(`#${id}`).style.opacity) > .99,id);
       assert.equal(await noOverflow(page),true);
       await page.screenshot({path:new URL(`${id}-${width}x${height}.png`,output).pathname.replace(/^\/(.:)/,'$1')});
     }

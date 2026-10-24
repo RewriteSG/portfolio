@@ -33,27 +33,71 @@ export function projectAtProgress(layout, progress) {
   return Math.min(layout.ids.length - 1, Math.floor(clamp((progress - START) / SPAN) * layout.ids.length));
 }
 
-/** Only the solar chapter grows. Each project's readable interval scales with content. */
-export function buildScrollMetrics(layout, viewportHeight, contentHeight = 0) {
+/** The panel's content scrolls only while the scene is visible on the journey. */
+export function sceneScrollRange(start, end, fade = 0) {
+  const from = clamp(Number(start));
+  const to = clamp(Number(end));
+  if (!(to > from)) return {start:from, end:to};
+  const fadeWidth = Math.min(Math.max(0, Number(fade) || 0), (to - from) / 4);
+  return {
+    start:from === 0 ? from : from + fadeWidth,
+    end:to === 1 ? to : to - fadeWidth,
+  };
+}
+
+/** Add enough root-scroll distance to reveal each panel's full overflow. */
+export function buildScrollMetrics(_layout, viewportHeight, panelMetrics = []) {
   const height = Math.max(1, viewportHeight);
   const baseline = Math.max(6500, 16 * height) - height;
-  const before = baseline * START;
-  const after = baseline * (1 - END);
-  const interval = Math.max(640, height * .9, contentHeight);
-  const projects = Math.max(baseline * SPAN, layout.ids.length * interval);
-  return {before, projects, after, total:before + projects + after};
+  const demands = (Array.isArray(panelMetrics) ? panelMetrics : []).flatMap(panel => {
+    const start = Number(panel.start);
+    const end = Number(panel.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
+    const from = clamp(start);
+    const to = clamp(end);
+    const span = to - from;
+    if (!span) return [];
+    const range = sceneScrollRange(from, to, panel.fade);
+    const visibleShare = (range.end - range.start) / span;
+    const overflow = Math.max(0, Number(panel.overflow) || 0);
+    const contentDuration = visibleShare > 0 ? overflow / visibleShare : overflow;
+    const minimumDuration = Math.max(0, Number(panel.minimumDuration) || 0);
+    const baseDuration = baseline * span;
+    return [{start:from, end:to, extra:Math.max(0, Math.max(contentDuration, minimumDuration) - baseDuration)}];
+  });
+
+  const boundaries = [...new Set([0, 1, ...demands.flatMap(({start, end}) => [start, end])])].sort((a, b) => a - b);
+  const segments = [];
+  let total = 0;
+  for (let index = 0; index < boundaries.length - 1; index++) {
+    const start = boundaries[index];
+    const end = boundaries[index + 1];
+    const span = end - start;
+    let length = baseline * span;
+    demands.forEach(demand => {
+      const overlap = Math.max(0, Math.min(end, demand.end) - Math.max(start, demand.start));
+      if (overlap) length += demand.extra * overlap / (demand.end - demand.start);
+    });
+    const scrollStart = total;
+    total += length;
+    segments.push({start, end, scrollStart, scrollEnd:total});
+  }
+  return {segments, total};
 }
 
 export function progressAtScroll(metrics, scroll) {
-  const offset = Math.max(0, Math.min(metrics.total, scroll));
-  if (offset <= metrics.before) return offset / metrics.before * START;
-  if (offset <= metrics.before + metrics.projects) return START + (offset - metrics.before) / metrics.projects * SPAN;
-  return END + (offset - metrics.before - metrics.projects) / metrics.after * (1 - END);
+  const value = Number(scroll);
+  const offset = Math.max(0, Math.min(metrics.total, Number.isNaN(value) ? 0 : value));
+  const segment = metrics.segments.find(item => offset <= item.scrollEnd) || metrics.segments.at(-1);
+  if (!segment) return 0;
+  const amount = (offset - segment.scrollStart) / (segment.scrollEnd - segment.scrollStart);
+  return segment.start + amount * (segment.end - segment.start);
 }
 
 export function scrollAtProgress(metrics, progress) {
   const p = clamp(progress);
-  if (p <= START) return p / START * metrics.before;
-  if (p <= END) return metrics.before + (p - START) / SPAN * metrics.projects;
-  return metrics.before + metrics.projects + (p - END) / (1 - END) * metrics.after;
+  const segment = metrics.segments.find(item => p <= item.end) || metrics.segments.at(-1);
+  if (!segment) return 0;
+  const amount = (p - segment.start) / (segment.end - segment.start);
+  return segment.scrollStart + amount * (segment.scrollEnd - segment.scrollStart);
 }

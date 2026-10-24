@@ -443,3 +443,46 @@
 ## Commit-message Handoff — Journey V2 (2026-10-24)
 - Recommended message: `docs(portfolio): record Journey V2 workflow completion`
 - Rationale: the pending change scope is only `WORKFLOW_STATE.md`; the message describes recording the completed implementation, validation, and role handoffs without implying another product-code change.
+
+## Designer Handoff — Journey scroll follow-up (2026-10-24)
+- Preserve the existing Journey identity: `#080e1e` space field, `#eff4ed` paper text, Raleway body/UI type, Georgia display type, fixed 3D world, and restrained crossfades. Keep the scene content as readable editorial copy with a comfortable ~60–70ch measure; media can use the wider canvas.
+- Current source: `.has-journey .scene-panel` is a fixed viewport box with `overflow-y:auto`; `.project-pages` is a fixed full-screen dialog with its own vertical scroll and locks body overflow. Make the root Journey scroll the only vertical reading surface. Long scenes/details need document-flow height or a root-scroll-driven content offset and a matching scroll budget; removing inner overflow alone would leave content below the viewport unreachable. Keep the 3D world pinned behind the moving/readable content.
+- Layout and pacing: let content determine each scene’s scroll length, with a short entry/settle beat and enough root-scroll distance to read the full copy/media before the next scene takes over. Recalculate from rendered content after manifest/media changes and viewport resize. Avoid wheel interception, scroll snapping, and fixed `100vh` content boxes. Keep heading, prose, metadata, gallery, and next/close navigation in one column on narrow screens; short landscape viewports should gain more root-scroll distance rather than compressing or clipping copy. Use viewport units only for background/control placement, and keep media bounded responsively.
+- Navigation/accessibility: detail navigation should land the main document at the project heading, preserve hash/history behavior, and return focus/scroll to the invoking project control on close/back. If details become in-flow content, use section/article semantics and remove modal focus trapping, background inerting, and body scroll lock; keep headings focusable for programmatic navigation, visible focus rings, and the 44px control targets. Ensure every paragraph remains reachable by touch, keyboard, and screen-reader navigation.
+- Preserve only purposeful nested interaction surfaces: keep the project orbit’s horizontal swipe list for dense/mobile controls and native video/iframe interaction. Keep `overflow:hidden` where it clips artwork/canvas, but do not use it as a reading viewport. Let the project jump list wrap in page flow; avoid a second vertical scrollbar for prose or project detail.
+- Serena and Context7 tools are not configured in this session; markup/styles were traced directly in `index.html`, `assets/journey-v2/styles.css`, `assets/journey-v2/project-pages.css`, `assets/journey-v2/app.js`, `assets/journey-v2/project-pages.js`, and `assets/journey-v2/project-layout.js`. No implementation files changed. Handoff: implement and validate the single-root-scroll treatment across long project details, short viewports, and keyboard/hash navigation.
+
+## Planner Update — Journey-native scene overflow (2026-10-24)
+- Request: remove the inner vertical scrollbar from long Journey scenes and have the main Journey scroll reveal all of their content.
+- Scope assumption: applies to `.scene-panel` content, generated project chapters, and the project jump list. Keep the full-screen JSON project-detail reader as a separate, intentionally scrollable reading surface; preserve the horizontal orbit list and native media controls.
+- Acceptance: no user-controlled vertical scrollbar in Journey scenes; wheel/touch/keyboard page movement advances the main timeline and reveals long scene content; the content is fully reachable before its scene fades away; navigation/hash links start at the top of long content; manifest/media/viewport remeasurement preserves normalized progress; reading fallback and project reader continue to work.
+- Plan: extend journey scroll metrics with per-panel intrinsic overflow and visual fade ranges; synchronize hidden panel `scrollTop` from root `scrollY`; adjust content navigation anchors and keyboard focus reveal; allow the project jump list to wrap in normal panel content; add pure metric and browser coverage for long content, resize, anchors, focus, and mobile/short viewports.
+- Designer guidance: retain the existing Journey visual system and fixed 3D world; use root-scroll-driven content offset plus matching timeline distance; maintain comfortable reading width and responsive layout; keep horizontal orbit controls and the separate JSON reader scroll intact.
+- Debater critique: approach is viable. Key risks are fade/scroll budget alignment, keyboard focus on off-screen controls, preserving progress after content/media/viewport changes, fallback mode, and keeping the JSON dialog isolated; tests should cover these explicitly.
+- Tooling note: Serena and Context7 are not configured; `.codex/agents/designer.md` is absent. Source was inspected directly. Handoff: Implementor to update `assets/journey-v2/project-layout.js`, `assets/journey-v2/app.js`, `assets/journey-v2/styles.css`, and Journey tests.
+
+## Implementor Handoff — Journey-native scene overflow (2026-10-24)
+- `assets/journey-v2/project-layout.js`: root-scroll metrics now allocate enough travel for each panel's overflow while preserving scene fades and reversible progress mapping.
+- `assets/journey-v2/app.js`: document scroll synchronizes hidden scene `scrollTop`; keyboard focus reveals offscreen controls; static/project anchors land in readable ranges; late manifest arrival reapplies a direct Projects hash only while the visitor remains at that original anchor; focus waits until the scene is no longer inert.
+- `assets/journey-v2/styles.css`: hides vertical scene scrolling and lets the project jump list wrap in scene flow. The full-screen JSON project reader remains an intentionally independent reader.
+- Coverage added/updated in `tests/journey-v2/project-layout.test.mjs`, `tests/journey-v2/journey-content-scroll.browser.mjs`, and `tests/journey-v2/accessibility-fallback.browser.mjs`. Browser checks exercise root wheel/touch scrolling, long desktop/mobile copy, focus, delayed project loading, resize/media remeasurement, fallback, and the existing project reader.
+
+## Reviewer Handoff — Journey-native scene overflow (2026-10-24)
+- Standards axis: no documented-standard violations. One low-severity possible duplicated range-mapping smell in `app.js` is a judgment call; the callers perform different projections, so no extraction was made.
+- Spec axis: review caught a late-manifest direct `#projects` anchor race and missing touch coverage. The anchor race is fixed and regression-tested; the mobile browser test now dispatches a real touch swipe. Keyboard/fallback and resize preservation are covered by existing browser checks.
+- Security review: no security-specific findings. The added focus/scroll path uses fixed selectors, clamped offsets, and root `scrollTo`; manifest rendering, safe links, and sandboxed embeds are unchanged.
+
+## Tester Handoff — Journey-native scene overflow (2026-10-24)
+- `$env:JOURNEY_REFERENCE_ROOT='D:/Github/GitHub/Github/portfolio'; node --test tests/journey-v2/versioning.test.mjs tests/journey-v2/routes.test.mjs tests/journey-v2/project-presentation.test.mjs tests/journey-v2/project-layout.test.mjs tests/journey-v2/project-data.test.mjs` — 39 passed, 0 failed.
+- Browser harness environment: `$env:JOURNEY_PLAYWRIGHT_MODULE='file:///C:/Users/Hazwan/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs'; $env:JOURNEY_BASE_URL='http://127.0.0.1:4173/'`; the accessibility run also set `$env:JOURNEY_SCREENSHOT_DIR=(Join-Path $env:TEMP 'journey-v2-scroll-review')`.
+- `node tests/journey-v2/journey-content-scroll.browser.mjs` — passed delayed `#projects`, long-scene wheel scroll, project index flow, and short mobile touch swipe reaching the final Contact copy.
+- `node tests/journey-v2/project-content-resize.browser.mjs` — passed text/video growth and normalized-progress preservation.
+- `node tests/journey-v2/accessibility-fallback.browser.mjs` — passed desktop/mobile/short-landscape focus, dialog, reduced-motion, fallback, and keyboard traversal scenarios.
+- `node tests/journey-v2/project-media-close.browser.mjs` — passed media teardown/reopen for button, Escape, Back, sync, and destroy.
+
+## Linter Handoff — Journey-native scene overflow (2026-10-24)
+- `node --check` passed for changed app/layout modules and the affected tests; `git diff --check` passed. No project lint/format configuration is present (see prior Linter Handoff).
+
+## Commit-message Handoff — Journey-native scene overflow (2026-10-24)
+- Recommended message: `feat(journey): make long scenes follow page scroll`.
+- Rationale: describes the visible behavior change; no commit was created.

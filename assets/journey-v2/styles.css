@@ -149,3 +149,8 @@
   .orbit-control.is-list .orbit-label{top:100px!important;bottom:auto;max-height:calc(100svh - 160px)}
   .orbit-control.is-list .orbit-stops{max-height:150px}
 }
+
+/* Scene copy follows the document's journey progress; no panel gets a vertical scrollbar. */
+.has-journey .scene-panel{overflow-x:hidden;overflow-y:hidden;scrollbar-width:none;overscroll-behavior:auto}
+.has-journey .hello-panel{overflow:hidden}
+.project-jump-list{max-height:none;overflow:visible;scroll-padding:0}
