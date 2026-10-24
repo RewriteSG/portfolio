@@ -47,7 +47,7 @@ try {
     const {page, errors} = await openScenario({count:1, orbitCount:0});
     assert.equal(await page.locator('#project-catalog-pager').evaluate(node => node.hidden), false);
     assert.equal(await page.locator('#project-catalog-page-number').innerText(), '01 / 01');
-    assert.equal(await page.locator('#project-catalog-page-number').getAttribute('aria-label'), 'Page 1 of 1');
+    assert.equal(await page.getByRole('group', {name:'Page 1 of 1'}).count(), 1, 'the single-page indicator exposes its computed accessible name');
     assert.equal(await page.locator('#project-catalog-previous').isDisabled(), true);
     assert.equal(await page.locator('#project-catalog-next').isDisabled(), true);
     assert.equal(await page.locator('#project-catalog-previous').getAttribute('aria-disabled'), null);
@@ -68,7 +68,6 @@ try {
       const grid = document.querySelector('#project-catalog-grid');
       const pageStatus = document.querySelector('#project-catalog-page-status');
       return {
-        label:document.querySelector('#project-catalog-page-number').getAttribute('aria-label'),
         pagerLabel:document.querySelector('#project-catalog-pager').getAttribute('aria-label'),
         controls:[...document.querySelectorAll('#project-catalog-previous,#project-catalog-next')].map(button => button.getAttribute('aria-controls')),
         pageStatus:{role:pageStatus.getAttribute('role'), live:pageStatus.getAttribute('aria-live'), atomic:pageStatus.getAttribute('aria-atomic')},
@@ -78,7 +77,7 @@ try {
       };
     });
     assert.deepEqual(accessibleState, {
-      label:'Page 1 of 4', pagerLabel:'Project pages',
+      pagerLabel:'Project pages',
       controls:['project-catalog-grid', 'project-catalog-grid'],
       pageStatus:{role:'status', live:'polite', atomic:'true'},
       gridLive:false, cardLive:false, statusOutsideGrid:true,
@@ -88,7 +87,7 @@ try {
     const previous = page.locator('#project-catalog-previous');
     await previous.focus();
     await page.evaluate(() => document.querySelector('#project-catalog-previous').click());
-    assert.equal(await page.locator('#project-catalog-page-number').getAttribute('aria-label'), 'Page 1 of 4', 'previous at the first page is a no-op');
+    assert.equal(await page.getByRole('group', {name:'Page 1 of 4'}).count(), 1, 'previous at the first page is a no-op');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'project-catalog-previous', 'a boundary no-op keeps focus');
     assert.equal(await previous.getAttribute('disabled'), null, 'multi-page boundary controls are not natively disabled');
     assert.equal(await previous.getAttribute('aria-disabled'), 'true');
@@ -96,7 +95,7 @@ try {
     const next = page.locator('#project-catalog-next');
     for (const expected of [1, 2, 3]) {
       await next.click();
-      assert.equal(await page.locator('#project-catalog-page-number').getAttribute('aria-label'), `Page ${expected + 1} of 4`);
+      assert.equal(await page.getByRole('group', {name:`Page ${expected + 1} of 4`}).count(), 1, 'the page indicator exposes its computed accessible name');
       assert.equal(await page.evaluate(() => document.activeElement.id), 'project-catalog-next', 'accepted page changes retain pager focus');
       assert.equal(await next.getAttribute('disabled'), null, 'multi-page arrows remain natively enabled');
       assert.deepEqual(await projectIds(page), fixture(13).slice(expected * 4, expected * 4 + 4).map(project => project.id));
@@ -105,7 +104,7 @@ try {
     assert.equal(await next.getAttribute('aria-disabled'), 'true');
     await next.focus();
     await page.evaluate(() => document.querySelector('#project-catalog-next').click());
-    assert.equal(await page.locator('#project-catalog-page-number').getAttribute('aria-label'), 'Page 4 of 4', 'next at the last page is a no-op');
+    assert.equal(await page.getByRole('group', {name:'Page 4 of 4'}).count(), 1, 'next at the last page is a no-op');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'project-catalog-next', 'a boundary no-op keeps focus');
 
     const reached = [];

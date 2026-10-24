@@ -107,6 +107,7 @@ export function createProjectCatalog({root, projects, resolveMedia, onOpen = () 
     pageNumber.textContent = page.pageCount
       ? `${String(page.pageIndex + 1).padStart(2, '0')} / ${String(page.pageCount).padStart(2, '0')}`
       : '00 / 00';
+    pageNumber.setAttribute('role', 'group');
     pageNumber.setAttribute('aria-label', page.pageCount
       ? `Page ${page.pageIndex + 1} of ${page.pageCount}`
       : 'No project pages');
