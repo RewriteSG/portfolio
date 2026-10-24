@@ -96,6 +96,7 @@ test('accepts only safe HTTP(S) URLs and validates conventional email addresses'
 test('resolves local media under the encoded project directory and rejects unsafe paths', () => {
   const project = { id: 'Driftwake' };
   assert.equal(resolveProjectMedia(project, './screenshot 1.png', baseUrl), './projects/Driftwake/screenshot%201.png');
+  assert.equal(resolveProjectMedia(project, './encoded%20space%2Bplus.png', baseUrl), './projects/Driftwake/encoded%20space%2Bplus.png');
   assert.equal(resolveProjectMedia({ id: 'project_one' }, './folder/a+b.png', baseUrl), './projects/project_one/folder/a%2Bb.png');
   assert.equal(resolveProjectMedia(project, 'https://cdn.example/video.mp4', baseUrl), 'https://cdn.example/video.mp4');
   assert.equal(resolveProjectMedia(project, '//cdn.example/image.png', baseUrl), 'https://cdn.example/image.png');
@@ -105,6 +106,8 @@ test('resolves local media under the encoded project directory and rejects unsaf
     '../secret.png', './nested/../../secret.png', '/absolute.png', 'C:\\absolute.png',
     'nested\\image.png', 'nested//image.png', './', 'nested/./image.png',
     'nested/%2e%2e/secret.png', 'nested/%2Fsecret.png', 'nested/%5csecret.png',
+    '%252e%252e%252fsecret.png', 'nested/%252e%252e/secret.png',
+    'nested/%252e%252e%252fsecret.png',
     'javascript:alert(1)', 'data:image/png;base64,abc', '', '   ',
   ]) {
     assert.equal(resolveProjectMedia(project, value, baseUrl), null, value);

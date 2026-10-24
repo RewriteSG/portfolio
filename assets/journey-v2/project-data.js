@@ -164,7 +164,10 @@ export function resolveProjectMedia(project, src, baseUrl = DEFAULT_BASE_URL) {
   const encodedSegments = [];
   for (const segment of segments) {
     const decoded = decodePathSegment(segment);
-    if (decoded === null || decoded === '.' || decoded === '..' || decoded.includes('/') || decoded.includes('\\')) return null;
+    if (
+      decoded === null || decoded === '.' || decoded === '..' ||
+      /%[0-9a-f]{2}/i.test(decoded) || decoded.includes('/') || decoded.includes('\\')
+    ) return null;
     try {
       encodedSegments.push(encodeURIComponent(decoded));
     } catch {
