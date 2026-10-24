@@ -19,6 +19,18 @@ The workflow uses:
 
 This repository stores its specialist role prompts in `.codex/agents/` and shared workflow rules in `AGENTS.md`.
 
+## Portfolio production app
+
+The published portfolio starts at `index.html` and loads its production
+interface from `assets/journey-v2/`. Project content is authored in
+`projects/<id>/index.json`; `.github/workflows/update-manifest.yml` generates
+the root `projects.json` manifest from those records. Keep editing the source
+JSON rather than the generated manifest. The original Journey in
+`overwrite-design/dist/journey/` and the pre-V2 root assets `assets/app.js`,
+`assets/style.css`, and `bundled-backup.html` are preserved references;
+Journey V2 is the production app. See `Docs.md` for the project schema and
+local preview instructions.
+
 ---
 
 ## Why this exists

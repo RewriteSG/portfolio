@@ -4,6 +4,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { runInNewContext } from 'node:vm';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const fixture = JSON.parse(readFileSync(path.join(projectRoot, 'tests/journey-v2/fixtures/journey-reference-hashes.json'), 'utf8'));
@@ -11,6 +12,17 @@ const referenceRoot = path.resolve(process.env.JOURNEY_REFERENCE_ROOT || project
 const referenceFiles = Object.keys(fixture).sort();
 const sha256 = file => createHash('sha256').update(readFileSync(file)).digest('hex');
 const read = file => readFileSync(path.join(projectRoot, file), 'utf8');
+const legacyRedirectScript = read('project.html').match(/<script\b[^>]*>([\s\S]*?)<\/script>/i)?.[1];
+
+function legacyRedirectDestination(search) {
+  let destination = null;
+  runInNewContext(legacyRedirectScript, {
+    URLSearchParams,
+    encodeURIComponent,
+    window: { location: { search, replace: value => { destination = value; } } },
+  });
+  return destination;
+}
 
 test('reference fixture covers every immutable Journey and shared source file', () => {
   const journeyRoot = path.join(referenceRoot, 'overwrite-design/dist/journey');
@@ -120,4 +132,30 @@ test('static fallback contains current identity, biography, contact, and skip na
   assert.match(html, /href="https:\/\/github\.com\/RewriteSG"/);
   assert.match(html, /<noscript>[\s\S]*?Projects are unavailable without JavaScript\.[\s\S]*?<\/noscript>/);
   assert.doesNotMatch(html, /hello@hazwan\.design|product designer/);
+});
+
+test('legacy project links redirect safe IDs and route missing or unsafe IDs to Projects', () => {
+  assert.ok(legacyRedirectScript, 'project.html must provide an inline compatibility redirect');
+  assert.equal(legacyRedirectDestination('?id=Mixed_Case-2'), './index.html#project=Mixed_Case-2');
+  assert.equal(legacyRedirectDestination('?id=Drift%77ake'), './index.html#project=Driftwake');
+
+  for (const search of ['', '?id=', '?id=../bad', '?id=%3Cscript%3E', '?id=a%20b', '?id=%E0%A4%A']) {
+    assert.equal(legacyRedirectDestination(search), './index.html#projects', `unsafe or absent ID in ${search}`);
+  }
+});
+
+test('README and Docs describe the production boundary and keep project JSON authoring guidance', () => {
+  for (const file of ['README.md', 'Docs.md']) {
+    const documentation = read(file);
+    assert.match(documentation, /assets\/journey-v2[\s\S]{0,160}production|production[\s\S]{0,160}assets\/journey-v2/i, `${file} must identify Journey V2 as production`);
+    assert.match(documentation, /overwrite-design\/dist\/journey\//, `${file} must identify the original Journey reference`);
+    assert.match(documentation, /assets\/app\.js/, `${file} must identify the legacy app reference`);
+    assert.match(documentation, /assets\/style\.css/, `${file} must identify the legacy stylesheet reference`);
+    assert.match(documentation, /projects\/<[^>]+>\/index\.json/, `${file} must retain the project JSON authoring path`);
+    assert.match(documentation, /projects\.json/, `${file} must explain the generated manifest`);
+  }
+
+  const docs = read('Docs.md');
+  assert.match(docs, /## Schema — `projects\/<Name>\/index\.json`/);
+  assert.match(docs, /`projects\.json` is generated — don't hand-edit it\./);
 });

@@ -1,26 +1,32 @@
 # Portfolio
 
-A GitHub Pages portfolio that discovers projects from the `projects/` folder
-and renders them client-side as a single-page app. No frameworks, no build
-step — the only "build" is a GitHub Action that regenerates `projects.json`
-whenever `projects/**` changes on `main`.
+A GitHub Pages portfolio whose production interface lives in
+`assets/journey-v2/`. It discovers project data from `projects/` and renders
+the Journey experience client-side. No frameworks or build step are required
+for the app; a GitHub Action regenerates `projects.json` whenever
+`projects/**` changes on `main`.
 
 ## How it works
 
-- Each project lives in its own folder under `projects/<Name>/`, with an
-  `index.json` describing it and any local image files.
+- Each project lives in its own folder under `projects/<id>/`, with an
+  `index.json` describing it and any local image files. The folder name
+  becomes the project ID; IDs may contain letters, numbers, underscores, and
+  hyphens.
 - On every push to `main` that touches `projects/**`, the workflow in
   `.github/workflows/update-manifest.yml` walks all `projects/*/index.json`
   files, merges them into a single `projects.json` at the repo root (adding
   the folder name as `id`), and commits it back.
-- `index.html` fetches `./projects.json` once and renders everything —
-  home, work, about, contact, and each project's detail view — as a
-  single-page app with hash routing (`#/`, `#/work`, `#/about`,
-  `#/contact`, `#/project/<id>`). No GitHub API calls, no per-project
-  requests, no rate-limit exposure no matter how much traffic the site
-  gets.
-- `project.html?id=<name>` still works as a legacy link — it redirects to
-  `index.html#/project/<name>`.
+- Root `index.html` loads the Journey V2 production modules and fetches
+  `./projects.json`. The Journey contains Hello, About, Projects, and Contact
+  sections; project detail links use `#project=<id>` and the project index
+  uses `#projects`.
+- `project.html?id=<id>` remains a compatibility redirect. Safe IDs redirect
+  to `./index.html#project=<id>`; missing or invalid IDs go to
+  `./index.html#projects`.
+- The original Journey under `overwrite-design/dist/journey/` and the
+  pre-V2 root files `assets/app.js`, `assets/style.css`, and
+  `bundled-backup.html` are preserved as references. The production page
+  loads Journey V2 from `assets/journey-v2/`.
 
 `projects.json` is generated — don't hand-edit it. Edits will be
 overwritten the next time the Action runs.
@@ -49,12 +55,11 @@ it's just part of the filesystem-style look, not required.
 
 ## Design
 
-The site matches the original `bundled-backup.html` reference design: a
-CRT/terminal aesthetic on a near-black background with a glowing accent
-color (green by default, toggleable to amber or cyan via the button in the
-top-right corner). First visit shows an animated boot-log intro before
-landing on the home page; typed prompts and headings appear throughout.
-Project cards and the detail page support a hover-to-zoom image lightbox.
+The production site follows the Journey design: a full-page scene with Hello,
+About, Projects, and Contact chapters, a restrained animated 3D backdrop, and
+project previews and details generated from the manifest. The older CRT
+portfolio and the source Journey files remain available as references; they
+are not loaded by the production shell.
 
 ## Adding a new project
 
@@ -155,14 +160,16 @@ the checked-in copy up to date).
 
 ```
 portfolio/
-├── bundled-backup.html          # Original design (source of design/functionality reference)
-├── index.html                   # Single-page app shell — home/work/about/contact/detail
-├── project.html                 # Legacy redirect: ?id=X → index.html#/project/X
+├── bundled-backup.html          # Legacy design reference
+├── index.html                   # Journey V2 production shell
+├── project.html                 # Compatibility redirect: ?id=X → index.html#project=X
 ├── projects.json                # Auto-generated manifest — do not edit by hand
 ├── assets/
-│   ├── style.css                # CRT terminal theme, responsive layout
-│   ├── info.js                  # All your editable site text — name, nav, copy, contact, socials
-│   └── app.js                   # Routing/render/filter/lightbox/intro/shader logic
+│   ├── info.js                  # Editable identity, About, Contact, and social content
+│   ├── journey-v2/              # Production interface, styles, and scene modules
+│   ├── style.css                # Legacy CRT stylesheet reference
+│   └── app.js                   # Legacy app reference
+├── overwrite-design/dist/journey/ # Original Journey source reference
 ├── projects/
 │   └── Driftwake/
 │       ├── index.json

@@ -5,12 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Redirecting… — A.Voss</title>
 <script>
-  // Legacy link support: project.html?id=X now lives in index.html#project=X
-  // inside the single-page app. Preserve the id and forward immediately.
+  // Keep legacy project links working with Journey V2's project ID rules.
   (function () {
     var params = new URLSearchParams(window.location.search);
     var id = params.get('id');
-    var dest = id ? './index.html#project=' + encodeURIComponent(id) : './index.html#work';
+    var isSafeId = typeof id === 'string' && /^[a-z0-9_-]+$/i.test(id);
+    var dest = isSafeId
+      ? './index.html#project=' + encodeURIComponent(id)
+      : './index.html#projects';
     window.location.replace(dest);
   })();
 </script>
