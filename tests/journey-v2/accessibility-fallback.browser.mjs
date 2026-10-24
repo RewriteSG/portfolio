@@ -117,10 +117,41 @@ try {
     const fallback = await context.newPage();
     if (kind === 'scene-module') await fallback.route('**/scene.js', route => route.abort());
     if (kind === 'all-modules') await fallback.route('**/journey-v2/app.js', route => route.abort());
-    if (kind === 'manifest') await fallback.route('**/projects.json', route => route.fulfill({status:503,body:'unavailable'}));
+    let settingsRequests = 0;
+    let manifestRequests = 0;
+    if (kind === 'manifest') {
+      await fallback.route('**/assets/journey-v2/settings.json', route => {
+        settingsRequests++;
+        return route.fulfill({json:{orbitCount:1}});
+      });
+      await fallback.route('**/projects.json', route => {
+        manifestRequests++;
+        return manifestRequests === 1
+          ? route.fulfill({status:503,body:'unavailable'})
+          : route.fulfill({json:fixture(8)});
+      });
+    }
     await fallback.goto(base);
     if (kind === 'scene-module') await fallback.waitForFunction(() => document.body.classList.contains('is-fallback'));
-    if (kind === 'manifest') {await fallback.waitForSelector('#projects-retry',{state:'attached'});await fallback.locator('.main-nav a[href="#contact"]').click();}
+    if (kind === 'manifest') {
+      await fallback.locator('#startup-retry').waitFor({state:'visible'});
+      const blocked = await fallback.evaluate(() => ({
+        pending:document.body.classList.contains('preflight-pending'),
+        gateVisible:document.querySelector('#journey-startup-gate')?.checkVisibility(),
+        shellVisibility:getComputedStyle(document.querySelector('.journey-shell')).visibility,
+        scene:Boolean(window.__journeyScene),
+        projects:Boolean(window.__journeyProjects),
+        canvas:Boolean(document.querySelector('#world canvas')),
+        controls:document.querySelectorAll('#orbit-stops .orbit-stop').length,
+      }));
+      assert.deepEqual(blocked,{pending:true,gateVisible:true,shellVisibility:'hidden',scene:false,projects:false,canvas:false,controls:0});
+      await fallback.locator('#startup-retry').click();
+      await ready(fallback);
+      assert.ok(settingsRequests >= 2, 'startup retry should fetch settings again');
+      assert.ok(manifestRequests >= 2, 'startup retry should fetch the manifest again');
+      assert.equal(await fallback.locator('#journey-startup-gate').isVisible(),false);
+      await fallback.locator('.main-nav a[href="#contact"]').click();
+    }
     assert.equal(await fallback.locator('#about').textContent().then(text => text.includes('game engines')),true);
     assert.equal(await fallback.locator('.contact-email').getAttribute('href'),'mailto:hi@example.dev');
     assert.equal(await noOverflow(fallback),true);

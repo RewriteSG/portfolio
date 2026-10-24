@@ -154,3 +154,12 @@
 .has-journey .scene-panel{overflow-x:hidden;overflow-y:hidden;scrollbar-width:none;overscroll-behavior:auto}
 .has-journey .hello-panel{overflow:hidden}
 .project-jump-list{max-height:none;overflow:visible;scroll-padding:0}
+
+.startup-gate{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:var(--gutter);background:var(--space)}
+.startup-gate-content{width:min(100%,36rem);padding:clamp(24px,6vw,64px);border:1px solid var(--line);background:#0b1423}
+#startup-status{font-size:clamp(14px,2vw,18px);color:var(--paper)}
+#startup-error{margin-top:18px;line-height:1.8;color:var(--paper)}
+#startup-retry{margin-top:20px}
+body.preflight-pending{overflow:hidden}
+body.preflight-pending .journey-shell{visibility:hidden;pointer-events:none}
+body.preflight-pending #journey-startup-gate{visibility:visible}

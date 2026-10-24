@@ -15,19 +15,27 @@ try {
   try {
     let releaseManifest;
     const manifestGate = new Promise(resolve => { releaseManifest = resolve; });
+    await delayedManifestPage.route('**/assets/journey-v2/settings.json', route => route.fulfill({json:{orbitCount:1}}));
     await delayedManifestPage.route('**/projects.json', async route => {
       await manifestGate;
       await route.fulfill({json:manifest});
     });
+    const manifestRequest = delayedManifestPage.waitForRequest('**/projects.json');
     await delayedManifestPage.goto(`${base}#projects`);
-    await delayedManifestPage.waitForFunction(() =>
-      window.__journeyScene && document.activeElement?.id === 'projects' && !window.__journeyProjects);
-    const initialProjectProgress = await delayedManifestPage.evaluate(() => window.__journeyScene.getDebugState().targetProgress);
-    assert.ok(initialProjectProgress > .57, 'the delayed fixture should reach the initial Projects anchor before the manifest resolves');
+    await manifestRequest;
+    const gateState = await delayedManifestPage.evaluate(() => ({
+      gateVisible:document.querySelector('#journey-startup-gate')?.checkVisibility(),
+      pending:document.body.classList.contains('preflight-pending'),
+      scene:Boolean(window.__journeyScene),
+      canvas:Boolean(document.querySelector('#world canvas')),
+      projects:Boolean(window.__journeyProjects),
+    }));
+    assert.deepEqual(gateState, {gateVisible:true, pending:true, scene:false, canvas:false, projects:false}, 'a delayed manifest must keep the first-paint gate visible without initializing the scene');
     releaseManifest();
     await delayedManifestPage.waitForFunction(() =>
-      window.__journeyProjects && document.activeElement?.id === 'projects'
-      && Math.abs(window.__journeyScene.getDebugState().targetProgress - .5425) < .002);
+      window.__journeyScene && window.__journeyProjects && document.activeElement?.id === 'projects'
+      && !document.body.classList.contains('preflight-pending'));
+    assert.ok(await delayedManifestPage.locator('#projects').isVisible(), 'successful preflight should honor the direct Projects hash');
     console.log('PASS delayed manifest keeps the direct Projects hash at the top of the index');
   } finally {
     await delayedManifestPage.close();

@@ -10,7 +10,15 @@
   <link rel="stylesheet" href="./assets/journey-v2/styles.css">
   <link rel="stylesheet" href="./assets/journey-v2/project-pages.css">
 </head>
-<body>
+<body class="preflight-pending">
+  <section id="journey-startup-gate" class="startup-gate" tabindex="-1" aria-busy="true" aria-labelledby="startup-status">
+    <div class="startup-gate-content">
+      <p id="startup-status" role="status" aria-live="polite">Checking portfolio settings and projects…</p>
+      <p id="startup-error" role="alert" aria-live="assertive" hidden></p>
+      <button id="startup-retry" class="project-view-more" type="button" hidden>Retry startup check</button>
+    </div>
+  </section>
+  <div class="journey-shell">
   <a class="skip-link" href="#about">Skip to about me</a>
   <div id="world" aria-hidden="true"></div>
   <div class="scene-shade" aria-hidden="true"></div>
@@ -60,7 +68,8 @@
 
   <footer class="journey-footer"><span class="footer-place"><i></i> Singapore <span>1°17′ N · 103°51′ E</span></span><span id="scene-label" class="scene-label">A little perspective</span><a id="scroll-cue" class="scroll-cue" href="#about"><span id="scroll-cue-text">Scroll to explore</span><svg viewBox="0 0 15 24" aria-hidden="true"><path d="M7.5 1v21M2 16.5 7.5 22l5.5-5.5"/></svg></a></footer>
   <div class="page-progress" aria-hidden="true"><span id="page-progress-fill"></span></div>
-  <noscript><style>#world,.scene-shade,.journey-track,.orbit-control,.journey-footer,.page-progress,.menu-toggle{display:none}</style><p class="projects-no-script">Projects are unavailable without JavaScript. Enable JavaScript to see project details. The About and Contact sections remain available here.</p></noscript>
+  <noscript><style>body.preflight-pending{overflow-x:hidden;overflow-y:auto}body.preflight-pending .journey-shell{visibility:visible;pointer-events:auto}#journey-startup-gate{display:none!important}#world,.scene-shade,.journey-track,.orbit-control,.journey-footer,.page-progress,.menu-toggle{display:none}</style><p class="projects-no-script">Projects are unavailable without JavaScript. Enable JavaScript to see project details. The About and Contact sections remain available here.</p></noscript>
+  </div>
   <script src="./assets/info.js"></script>
   <script type="module" src="./assets/journey-v2/app.js"></script>
 </body>

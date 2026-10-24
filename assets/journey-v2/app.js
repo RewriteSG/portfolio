@@ -2,8 +2,13 @@ import { loadProjectManifest, resolveProjectMedia, safeEmail, safeHttpUrl } from
 import { buildProjectPresentation } from './project-presentation.js';
 import { buildProjectLayout, projectAtProgress, buildScrollMetrics, progressAtScroll, scrollAtProgress, sceneScrollRange } from './project-layout.js';
 import { createProjectPages, renderProjectChapters } from './project-pages.js';
+import { JourneySettingsError, validateJourneySettings } from './settings.js';
 
 const body = document.body;
+const startupGate = document.querySelector('#journey-startup-gate');
+const startupStatus = document.querySelector('#startup-status');
+const startupError = document.querySelector('#startup-error');
+const startupRetry = document.querySelector('#startup-retry');
 let panels = [...document.querySelectorAll('.scene-panel')];
 const track = document.querySelector('#journey-track');
 const ring = document.querySelector('#orbit-control');
@@ -25,6 +30,7 @@ let scrollMetrics = buildScrollMetrics(projectLayout, innerHeight);
 let scrollFrame = 0;
 let needsMeasure = false;
 let preserveOnMeasure = false;
+let journeyReady = false;
 let isReading = false;
 let requestedReading = false;
 let failed = false;
@@ -126,73 +132,59 @@ const projectJumpList = textElement('nav', 'project-jump-list', '');
 projectJumpList.setAttribute('aria-label', 'Browse projects');
 projectStatus.after(projectJumpList);
 
-function showProjectStatus(message, retry = false) {
+function showProjectStatus(message) {
   projectStatus.textContent = message;
   document.querySelector('#projects-retry')?.remove();
-  if (retry) {
-    const button = textElement('button', 'project-view-more', 'Retry loading projects');
-    button.id = 'projects-retry';
-    button.type = 'button';
-    button.addEventListener('click', loadProjects);
-    projectStatus.after(button);
-  }
 }
 
-async function loadProjects() {
-  showProjectStatus('Loading projects…');
-  try {
-    const {projects, rejected} = await loadProjectManifest();
-    const requestedHash = location.hash.slice(1);
-    const wasAtProjectsAnchor = requestedHash === 'projects'
-      && Math.abs((scene?.targetProgress ?? progressAtScroll(scrollMetrics, scrollY)) - anchors.projects) < .012;
-    projectPages?.destroy();
-    projectPresentation = buildProjectPresentation(projects);
-    renderProjectChapters({presentation:projectPresentation, mount:projectMount, controls:document.querySelector('#orbit-stops'), indexControls:projectJumpList, resolveMedia:resolveProjectMedia});
-    projectIds.splice(1, projectIds.length, ...projectPresentation.chapters.map(item => item.targetId));
-    projectSection.dataset.end = projects.length ? '.565' : '.83';
-    projectSection.dataset.start = projects.length ? '.535' : '.565';
-    panels = [...document.querySelectorAll('.scene-panel')];
-    refreshStaticSectionAnchors();
-    anchors.projects = panelContentRange(projectSection).start;
-    projectPresentation.chapters.forEach(item => {
-      const panel = panels.find(candidate => candidate.id === item.targetId);
-      anchors[item.targetId] = panel ? panelContentRange(panel).start : item.progress;
-    });
-    ringStops = [...document.querySelectorAll('.orbit-stop')];
-    body.classList.toggle('has-many-projects', projects.length > 32);
-    const summary = projects.length ? `${projects.length} ${projects.length === 1 ? 'project' : 'projects'} to explore.` : 'No projects to show yet.';
-    showProjectStatus(`${summary}${rejected ? ` ${rejected} invalid ${rejected === 1 ? 'entry was' : 'entries were'} skipped.` : ''}`);
-    projectPages = createProjectPages({projects, presentation:projectPresentation, resolveMedia:resolveProjectMedia,
-      onOpen:item => {
-        focusedProjectId = item.id;
-        scene?.setProjectFocus(item.id);
-        document.dispatchEvent(new CustomEvent('journey:project-open', {detail:item}));
-      },
-      onClose:({direct, restore}) => {
-        focusedProjectId = null;
-        scene?.setProjectFocus(null);
-        // A modal temporarily moves focus away from its invoking chapter.
-        // Re-enable that chapter before the controller restores keyboard focus.
-        restoringFocusPanel = restore?.focus?.closest('.scene-panel') || null;
-        if (restoringFocusPanel) {
-          restoringFocusPanel.inert = false;
-          restoringFocusPanel.classList.add('is-active');
-          restoringFocusPanel.style.opacity = '1';
-          restoringFocusPanel.setAttribute('aria-hidden', 'false');
-        }
-        // popstate precedes hashchange: preserve the controller's exact scroll restore.
-        restoredProjectHash = location.hash;
-        if (direct) goTo('projects', {instant:true, updateHash:false});
-      },
-    });
-    window.__journeyProjects = {presentation:projectPresentation, pages:projectPages};
-    document.dispatchEvent(new CustomEvent('journey:projects-ready', {detail:{presentation:projectPresentation, projects, wasAtProjectsAnchor}}));
-    measure();
-    projectPages.syncFromLocation();
-  } catch (error) {
-    console.warn('Projects could not be loaded.', error);
-    showProjectStatus('Projects could not be loaded. Please try again.', true);
-  }
+function loadProjects({projects, rejected}, orbitCount) {
+  const requestedHash = location.hash.slice(1);
+  const wasAtProjectsAnchor = requestedHash === 'projects'
+    && Math.abs((scene?.targetProgress ?? progressAtScroll(scrollMetrics, scrollY)) - anchors.projects) < .012;
+  projectPages?.destroy();
+  projectPresentation = buildProjectPresentation(projects, orbitCount);
+  renderProjectChapters({presentation:projectPresentation, mount:projectMount, controls:document.querySelector('#orbit-stops'), indexControls:projectJumpList, resolveMedia:resolveProjectMedia});
+  projectIds.splice(1, projectIds.length, ...projectPresentation.chapters.map(item => item.targetId));
+  projectSection.dataset.end = projects.length ? '.565' : '.83';
+  projectSection.dataset.start = projects.length ? '.535' : '.565';
+  panels = [...document.querySelectorAll('.scene-panel')];
+  refreshStaticSectionAnchors();
+  anchors.projects = panelContentRange(projectSection).start;
+  projectPresentation.chapters.forEach(item => {
+    const panel = panels.find(candidate => candidate.id === item.targetId);
+    anchors[item.targetId] = panel ? panelContentRange(panel).start : item.progress;
+  });
+  ringStops = [...document.querySelectorAll('.orbit-stop')];
+  body.classList.toggle('has-many-projects', projects.length > 32);
+  const summary = projects.length ? `${projects.length} ${projects.length === 1 ? 'project' : 'projects'} to explore.` : 'No projects to show yet.';
+  showProjectStatus(`${summary}${rejected ? ` ${rejected} invalid ${rejected === 1 ? 'entry was' : 'entries were'} skipped.` : ''}`);
+  projectPages = createProjectPages({projects, presentation:projectPresentation, resolveMedia:resolveProjectMedia,
+    onOpen:item => {
+      focusedProjectId = item.id;
+      scene?.setProjectFocus(item.id);
+      document.dispatchEvent(new CustomEvent('journey:project-open', {detail:item}));
+    },
+    onClose:({direct, restore}) => {
+      focusedProjectId = null;
+      scene?.setProjectFocus(null);
+      // A modal temporarily moves focus away from its invoking chapter.
+      // Re-enable that chapter before the controller restores keyboard focus.
+      restoringFocusPanel = restore?.focus?.closest('.scene-panel') || null;
+      if (restoringFocusPanel) {
+        restoringFocusPanel.inert = false;
+        restoringFocusPanel.classList.add('is-active');
+        restoringFocusPanel.style.opacity = '1';
+        restoringFocusPanel.setAttribute('aria-hidden', 'false');
+      }
+      // popstate precedes hashchange: preserve the controller's exact scroll restore.
+      restoredProjectHash = location.hash;
+      if (direct) goTo('projects', {instant:true, updateHash:false});
+    },
+  });
+  window.__journeyProjects = {presentation:projectPresentation, pages:projectPages};
+  document.dispatchEvent(new CustomEvent('journey:projects-ready', {detail:{presentation:projectPresentation, projects, wasAtProjectsAnchor}}));
+  measure();
+  projectPages.syncFromLocation();
 }
 
 document.addEventListener('journey:project-route-error', () => showProjectStatus('That project link is unavailable. Choose a project below.'));
@@ -553,7 +545,7 @@ function enableJourney() {
 }
 motionPreference.addEventListener('change', () => {
   scene?.setReducedMotion(prefersReducedMotion());
-  if (failed) return;
+  if (!journeyReady || failed) return;
   if (prefersReducedMotion()) makeReadable();
   else if (!requestedReading) enableJourney();
   else { readingButton.disabled = false; readingButton.textContent = 'Return to the visual journey'; }
@@ -574,6 +566,7 @@ document.addEventListener('focusin', event => {
 addEventListener('scroll', () => scheduleScrollUpdate(), {passive:true});
 addEventListener('resize', () => scheduleScrollUpdate({measure:true, preserve:true}), {passive:true});
 addEventListener('hashchange', () => {
+  if (!journeyReady) return;
   const restored = restoredProjectHash === location.hash;
   restoredProjectHash = null;
   if (!restored) goTo(location.hash.slice(1), {updateHash:false, focus:true});
@@ -585,12 +578,63 @@ addEventListener('pagehide', event => {
   scene?.dispose?.();
 });
 
-loadProjects();
-if (prefersReducedMotion()) makeReadable();
-else { body.classList.add('has-journey'); updatePresentation(0); }
-measure();
-import('./scene.js').then(({JourneyScene}) => {
+function setStartupChecking() {
+  startupGate.hidden = false;
+  startupGate.focus({preventScroll:true});
+  startupGate.setAttribute('aria-busy', 'true');
+  startupStatus.hidden = false;
+  startupStatus.textContent = 'Checking portfolio settings and projects…';
+  startupError.hidden = true;
+  startupRetry.hidden = true;
+}
+
+function reportStartupFailure(error) {
+  startupGate.setAttribute('aria-busy', 'false');
+  startupStatus.hidden = true;
+  startupError.hidden = false;
+  if (error instanceof JourneySettingsError) {
+    startupError.textContent = `${error.message} Correct settings.json and reload the page.`;
+    startupRetry.hidden = true;
+    return;
+  }
+  console.warn('Journey startup data could not be loaded.', error);
+  startupError.textContent = 'The portfolio could not load its startup data. Check your connection and retry.';
+  startupRetry.hidden = false;
+}
+
+async function fetchStartupData() {
+  const [settingsResponse, manifest] = await Promise.all([
+    fetch('./assets/journey-v2/settings.json'),
+    loadProjectManifest(),
+  ]);
+  if (!settingsResponse.ok) throw new Error(`Settings request failed with HTTP ${settingsResponse.status}.`);
+  let settingsInput;
   try {
+    settingsInput = await settingsResponse.json();
+  } catch {
+    throw new JourneySettingsError('<invalid JSON>', manifest.projects.length);
+  }
+  return {manifest, settings:validateJourneySettings(settingsInput, manifest.projects.length)};
+}
+
+async function bootJourney() {
+  setStartupChecking();
+  try {
+    const {manifest, settings} = await fetchStartupData();
+    loadProjects(manifest, settings.orbitCount);
+    journeyReady = true;
+    body.classList.remove('preflight-pending');
+    startupGate.hidden = true;
+    if (prefersReducedMotion()) makeReadable();
+    else { body.classList.add('has-journey'); updatePresentation(0); }
+    measure();
+  } catch (error) {
+    reportStartupFailure(error);
+    return;
+  }
+
+  try {
+    const {JourneyScene} = await import('./scene.js');
     scene = new JourneyScene(document.querySelector('#world'), {
       reducedMotion:prefersReducedMotion(),
       projectIds:projectLayout.ids,
@@ -610,4 +654,7 @@ import('./scene.js').then(({JourneyScene}) => {
     // Avoid a second unconditional measurement resetting an explicit scene jump.
     document.fonts.ready.then(sizeProjectPreviews);
   } catch (error) { handleError(error); }
-}).catch(handleError);
+}
+
+startupRetry.addEventListener('click', bootJourney);
+bootJourney();

@@ -31,6 +31,12 @@ for the app; a GitHub Action regenerates `projects.json` whenever
 `projects.json` is generated — don't hand-edit it. Edits will be
 overwritten the next time the Action runs.
 
+Set the featured orbit size in `assets/journey-v2/settings.json`, for example
+`{"orbitCount":1}`. `orbitCount` must be a safe integer from `0` through the
+number of valid projects in `projects.json`. Startup validates this setting
+before revealing the Journey or creating its scene; a missing or invalid value
+blocks the page until the setting is corrected and the page is reloaded.
+
 ## Customizing production copy — `assets/info.js`
 
 Root `index.html` loads this file before the Journey V2 app. The production
