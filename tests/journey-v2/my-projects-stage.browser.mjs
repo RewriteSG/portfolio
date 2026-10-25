@@ -60,6 +60,7 @@ function readStageState(page) {
         returnStart:scene.projectLayout.returnStart,
         catalogFadeEnd:scene.projectLayout.catalogFadeEnd,
         earthArrival:scene.projectLayout.earthArrival,
+        earthZoomStart:scene.projectLayout.earthZoomStart,
         earthZoomEnd:scene.projectLayout.earthZoomEnd,
         returnEnd:scene.projectLayout.returnEnd,
       },
@@ -67,7 +68,7 @@ function readStageState(page) {
   });
 }
 
-async function readCameraScrollSpans(page) {
+async function readCameraScrollSpans(page, {floorBinding = false} = {}) {
   const input = await page.evaluate(() => {
     const scene = window.__journeyScene;
     const height = innerHeight;
@@ -92,17 +93,24 @@ async function readCameraScrollSpans(page) {
         projectsStageStart:scene.projectLayout.projectsStageStart,
         returnStart:scene.projectLayout.returnStart,
         returnEnd:scene.projectLayout.returnEnd,
+        earthArrival:scene.projectLayout.earthArrival,
+        earthZoomStart:scene.projectLayout.earthZoomStart,
+        earthZoomEnd:scene.projectLayout.earthZoomEnd,
       },
       panels,
     };
   });
-  const metrics = buildScrollMetrics(input.layout, input.height, input.panels);
+  const metrics = buildScrollMetrics(input.layout, input.height, floorBinding ? [] : input.panels);
   return {
     height:input.height,
     catalog:scrollAtProgress(metrics, input.layout.projectsStageStart)
       - scrollAtProgress(metrics, input.layout.catalogCameraStart),
     return:scrollAtProgress(metrics, input.layout.returnEnd)
       - scrollAtProgress(metrics, input.layout.returnStart),
+    earthHold:scrollAtProgress(metrics, input.layout.earthZoomStart)
+      - scrollAtProgress(metrics, input.layout.earthArrival),
+    earthZoom:scrollAtProgress(metrics, input.layout.earthZoomEnd)
+      - scrollAtProgress(metrics, input.layout.earthZoomStart),
   };
 }
 
@@ -281,8 +289,8 @@ try {
     assert.ok(Math.abs(zeroOrbitStage.progress - .535) < .0001, `zero-orbit catalog starts at .535, received ${zeroOrbitStage.progress}`);
     assert.ok(zeroOrbitSpans.catalog >= 1.5 * zeroOrbitSpans.height - 1e-7,
       `zero-orbit catalog handoff retains its 1.5× floor: ${JSON.stringify(zeroOrbitSpans)}`);
-    assert.ok(zeroOrbitSpans.return >= 2.25 * zeroOrbitSpans.height - 1e-7,
-      `zero-orbit return has the 2.25× floor: ${JSON.stringify(zeroOrbitSpans)}`);
+    assert.ok(zeroOrbitSpans.return >= 4.5 * zeroOrbitSpans.height - 1e-7,
+      `zero-orbit return has the 4.5× floor: ${JSON.stringify(zeroOrbitSpans)}`);
     assert.ok(await page.evaluate(() => Boolean(document.querySelector('#project-mount').compareDocumentPosition(document.querySelector('#projects')) & Node.DOCUMENT_POSITION_FOLLOWING)), 'the orbit mount precedes the catalog stage in DOM order');
     assert.deepEqual(errors, []);
     console.log('PASS empty catalog starts at .535 after solar intro and hides pagination');
@@ -304,7 +312,7 @@ try {
     const stageMiddle = await setStageProgress(page, .72);
     assert.ok(Math.abs(stageEntry.progress - .535) < .0001, 'zero-orbit catalog follows the solar intro');
     assert.deepEqual(stageEntry.returnPhases, {
-      returnStart:.90, catalogFadeEnd:.91, earthArrival:.922, earthZoomEnd:.93, returnEnd:.94,
+      returnStart:.90, catalogFadeEnd:.91, earthArrival:.922, earthZoomStart:.926, earthZoomEnd:.93, returnEnd:.94,
     });
     assert.deepEqual({
       type:stageEntry.sunMaterialType,
@@ -365,17 +373,30 @@ try {
     assert.notDeepEqual(zeroTravel.camera, zeroFadeEnd.camera, 'zero-orbit camera travel starts after the catalog fade');
     const zeroArrival = await setStageProgress(page, .922);
     const zeroArrivalBounds = await projectedEarthBounds(page, .922);
-    const zeroZoomMiddle = await setStageProgress(page, .926);
-    const zeroZoomMiddleBounds = await projectedEarthBounds(page, .926);
+    const zeroHoldMiddle = await setStageProgress(page, .924);
+    const zeroHoldMiddleBounds = await projectedEarthBounds(page, .924);
+    const zeroHoldEnd = await setStageProgress(page, .925);
+    const zeroHoldEndBounds = await projectedEarthBounds(page, .925);
+    const zeroZoomStart = await setStageProgress(page, .926);
+    const zeroZoomStartBounds = await projectedEarthBounds(page, .926);
+    const zeroZoomMiddle = await setStageProgress(page, .928);
+    const zeroZoomMiddleBounds = await projectedEarthBounds(page, .928);
     const zeroZoomEnd = await setStageProgress(page, .93);
     const zeroZoomEndBounds = await projectedEarthBounds(page, .93);
     assert.ok(zeroArrival.camera.some((value, index) => Math.abs(value - zeroTravel.camera[index]) > .1), 'zero-orbit travel reaches the Earth-facing pose');
     assertEarthInFrame(zeroArrivalBounds, 1440, 900, 'zero-orbit Earth arrival');
     assertEarthInFrame(zeroZoomMiddleBounds, 1440, 900, 'zero-orbit mid-zoom');
     assertEarthInFrame(zeroZoomEndBounds, 1440, 900, 'zero-orbit zoom completion');
+    assert.deepEqual(zeroHoldMiddle.camera, zeroArrival.camera, 'zero-orbit Earth pose holds at .924');
+    assert.deepEqual(zeroHoldEnd.camera, zeroArrival.camera, 'zero-orbit Earth pose holds at .925');
+    assert.deepEqual(zeroZoomStart.camera, zeroArrival.camera, 'zero-orbit zoom starts after the arrival hold at .926');
+    assert.deepEqual(zeroHoldMiddleBounds, zeroArrivalBounds, 'zero-orbit Earth bounds stay fixed through .924');
+    assert.deepEqual(zeroHoldEndBounds, zeroArrivalBounds, 'zero-orbit Earth bounds stay fixed through .925');
+    assert.deepEqual(zeroZoomStartBounds, zeroArrivalBounds, 'zero-orbit Earth bounds stay fixed at the .926 zoom start');
     assert.ok(zeroArrivalBounds.width < zeroZoomMiddleBounds.width && zeroZoomMiddleBounds.width < zeroZoomEndBounds.width,
       `zero-orbit Earth grows during the distinct zoom: ${JSON.stringify({zeroArrivalBounds,zeroZoomMiddleBounds,zeroZoomEndBounds})}`);
     assert.equal(zeroZoomEnd.returnPhases.earthZoomEnd, .93);
+    assert.equal(zeroZoomEnd.returnPhases.earthZoomStart, .926);
     const zeroReverseTravel = await setStageProgress(page, .916);
     const zeroReverseFade = await setStageProgress(page, .905);
     assert.notDeepEqual(zeroReverseTravel.camera, zeroZoomMiddle.camera, 'zero-orbit camera scrubs back from zoom toward catalog');
@@ -395,8 +416,15 @@ try {
     assert.ok(Math.abs(directStage.progress - .83) < .0001, `direct #projects hash starts after the featured orbit at .83, received ${directStage.progress}`);
     assert.ok(orbitSpans.catalog >= 1.5 * orbitSpans.height - 1e-7,
       `orbit catalog handoff retains its 1.5× floor: ${JSON.stringify(orbitSpans)}`);
-    assert.ok(orbitSpans.return >= 2.25 * orbitSpans.height - 1e-7,
-      `orbit return has the 2.25× floor: ${JSON.stringify(orbitSpans)}`);
+    assert.ok(orbitSpans.return >= 4.5 * orbitSpans.height - 1e-7,
+      `orbit return has the 4.5× floor: ${JSON.stringify(orbitSpans)}`);
+    const floorBindingSpans = await readCameraScrollSpans(page, {floorBinding:true});
+    assert.ok(Math.abs(floorBindingSpans.return - 4.5 * floorBindingSpans.height) < 1e-7,
+      `floor-binding return span is exactly 4.5× viewport height: ${JSON.stringify(floorBindingSpans)}`);
+    assert.ok(Math.abs(floorBindingSpans.earthHold - .45 * floorBindingSpans.height) < 1e-7,
+      `floor-binding Earth hold spans .45× viewport height: ${JSON.stringify(floorBindingSpans)}`);
+    assert.ok(Math.abs(floorBindingSpans.earthZoom - .45 * floorBindingSpans.height) < 1e-7,
+      `floor-binding Earth zoom spans .45× viewport height: ${JSON.stringify(floorBindingSpans)}`);
     assert.equal(directStage.sunMaterialType, 'MeshBasicMaterial', 'direct catalog entry uses a flat Sun surface');
     assert.equal(directStage.sunMaterialColor, 0xffd8a0);
     const directSunBounds = await projectedSunBounds(page, .83);
@@ -544,26 +572,44 @@ try {
     assert.notDeepEqual(travel.camera, fadeComplete.camera, 'camera travel starts only after the catalog fade');
     const arrival = await setStageProgress(page, .922);
     const arrivalBounds = await projectedEarthBounds(page, .922);
-    const zoomMiddle = await setStageProgress(page, .926);
-    const zoomMiddleBounds = await projectedEarthBounds(page, .926);
+    const holdMiddle = await setStageProgress(page, .924);
+    const holdMiddleBounds = await projectedEarthBounds(page, .924);
+    const holdLate = await setStageProgress(page, .925);
+    const holdLateBounds = await projectedEarthBounds(page, .925);
+    const zoomStart = await setStageProgress(page, .926);
+    const zoomStartBounds = await projectedEarthBounds(page, .926);
+    const zoomMiddle = await setStageProgress(page, .928);
+    const zoomMiddleBounds = await projectedEarthBounds(page, .928);
     const zoomComplete = await setStageProgress(page, .93);
     const zoomCompleteBounds = await projectedEarthBounds(page, .93);
     assertEarthInFrame(arrivalBounds, 1440, 900, 'orbit Earth arrival');
+    assertEarthInFrame(holdMiddleBounds, 1440, 900, 'orbit Earth hold midpoint');
+    assertEarthInFrame(holdLateBounds, 1440, 900, 'orbit Earth hold end');
+    assertEarthInFrame(zoomStartBounds, 1440, 900, 'orbit Earth zoom start');
     assertEarthInFrame(zoomMiddleBounds, 1440, 900, 'orbit mid-zoom');
     assertEarthInFrame(zoomCompleteBounds, 1440, 900, 'orbit zoom completion');
     assert.ok(arrivalBounds.width < zoomMiddleBounds.width && zoomMiddleBounds.width < zoomCompleteBounds.width,
       `Earth grows through a distinct zoom after arrival: ${JSON.stringify({arrivalBounds,zoomMiddleBounds,zoomCompleteBounds})}`);
     assert.notDeepEqual(arrival.camera, travel.camera, 'the camera reaches the Earth-facing arrival pose at .922');
+    assert.deepEqual(holdMiddle.camera, arrival.camera, 'the arrived camera pose holds through .924');
+    assert.deepEqual(holdLate.camera, arrival.camera, 'the arrived camera pose holds through .925');
+    assert.deepEqual(zoomStart.camera, arrival.camera, 'the zoom begins after the identical arrival pose at .926');
+    assert.deepEqual(holdMiddleBounds, arrivalBounds, 'Earth bounds stay fixed through .924');
+    assert.deepEqual(holdLateBounds, arrivalBounds, 'Earth bounds stay fixed through .925');
+    assert.deepEqual(zoomStartBounds, arrivalBounds, 'Earth bounds remain at arrival size at .926');
+    assert.equal(zoomComplete.returnPhases.earthZoomStart, .926);
     assert.equal(zoomComplete.returnPhases.earthZoomEnd, .93);
     const returned = await setStageProgress(page, .94);
     assert.ok(returned.sunOpacity < .001, 'Sun is faded by the end of the return interval');
     assert.equal(returned.phase, 'city', 'the established Contact/city scene starts at .94');
     assert.deepEqual(await readCatalogVisibility(page), {opacity:0, inert:true, ariaHidden:'true'}, 'catalog is hidden after the return completes');
 
-    const reverseZoom = await setStageProgress(page, .926);
+    const reverseZoom = await setStageProgress(page, .928);
+    const reverseHold = await setStageProgress(page, .925);
     const reverseTravel = await setStageProgress(page, .916);
     const reverseFade = await setStageProgress(page, .905);
     assert.deepEqual(reverseZoom.camera, zoomMiddle.camera, 'reverse scrubbing returns to the same zoom pose');
+    assert.deepEqual(reverseHold.camera, holdLate.camera, 'reverse scrubbing returns to the held Earth arrival pose');
     assert.deepEqual(reverseTravel.camera, travel.camera, 'reverse scrubbing returns to the same travel pose');
     assert.deepEqual(reverseFade.camera, fadeMiddle.camera, 'reverse scrubbing holds the catalog composition during fade');
     assert.ok(Math.abs((await readCatalogVisibility(page)).opacity - .5) < .001, 'catalog fade reverses with scroll progress');
@@ -693,7 +739,7 @@ try {
         `split-layout Sun clears the right catalog: ${JSON.stringify({sun,catalogBox})}`);
     }
     const arrivalBounds = await projectedEarthBounds(page, .922);
-    const zoomMiddleBounds = await projectedEarthBounds(page, .926);
+    const zoomMiddleBounds = await projectedEarthBounds(page, .928);
     const zoomEndBounds = await projectedEarthBounds(page, .93);
     assertEarthInFrame(arrivalBounds, viewport.width, viewport.height, `${viewport.width}px Earth arrival`);
     assertEarthInFrame(zoomMiddleBounds, viewport.width, viewport.height, `${viewport.width}px Earth mid-zoom`);

@@ -45,6 +45,7 @@ function buildCameraPath(layout, width = 1440, height = 900, fov = 42) {
     {p:layout.returnStart, ...catalog},
     {p:layout.catalogFadeEnd, ...catalog},
     {p:layout.earthArrival, ...arrival},
+    {p:layout.earthZoomStart, ...arrival},
     {p:layout.earthZoomEnd, ...zoom},
     {p:layout.returnEnd, ...contact},
     ...path.filter(point => point.p > layout.returnEnd),

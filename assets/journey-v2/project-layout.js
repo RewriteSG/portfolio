@@ -4,6 +4,7 @@ const END = .83;
 const RETURN_START = .90;
 const CATALOG_FADE_END = .91;
 const EARTH_ARRIVAL = .922;
+const EARTH_ZOOM_START = .926;
 const EARTH_ZOOM_END = .93;
 const RETURN_END = .94;
 const clamp = value => Math.max(0, Math.min(1, Number.isNaN(value) ? 0 : value));
@@ -37,6 +38,7 @@ export function buildProjectLayout(projectIds = []) {
     returnStart:RETURN_START,
     catalogFadeEnd:CATALOG_FADE_END,
     earthArrival:EARTH_ARRIVAL,
+    earthZoomStart:EARTH_ZOOM_START,
     earthZoomEnd:EARTH_ZOOM_END,
     returnEnd:RETURN_END,
   };
@@ -107,7 +109,7 @@ export function buildScrollMetrics(layout, viewportHeight, panelMetrics = []) {
 
   let metrics = buildSegments(baseline, demands);
   const catalogCameraFloor = 1.5 * height;
-  const returnCameraFloor = 2.25 * height;
+  const returnCameraFloor = 4.5 * height;
   const intervals = [
     {start:layout?.catalogCameraStart, end:layout?.projectsStageStart, floor:catalogCameraFloor},
     {start:layout?.returnStart, end:layout?.returnEnd, floor:returnCameraFloor},
