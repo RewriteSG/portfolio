@@ -11,6 +11,7 @@ try {
     const page = await browser.newPage({viewport:{width:1280,height:900}});
     try {
       await page.route('**/projects.json', route => route.fulfill({json:manifest}));
+      await page.route('**/assets/journey-v2/settings.json', route => route.fulfill({json:{orbitCount:8}}));
       await page.goto(`${base}#journey-project-Content_4`);
       await page.waitForFunction(() => window.__journeyScene && window.__journeyProjects && Number(document.querySelector('#journey-project-Content_4')?.style.opacity) === 1);
       await page.waitForTimeout(250);
