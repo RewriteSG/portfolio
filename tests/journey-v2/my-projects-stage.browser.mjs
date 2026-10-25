@@ -197,6 +197,37 @@ function assertEarthInFrame(bounds, width, height, label) {
     `${label} keeps Earth fully inside the viewport: ${JSON.stringify(bounds)}`);
 }
 
+function projectedPlanetBounds(page, projectId) {
+  return page.evaluate(projectId => {
+    const scene=window.__journeyScene;
+    const index=scene.projectLayout.ids.indexOf(projectId);
+    const sphere=scene.markerForIndex(index).planet;
+    const Vector3=scene.camera.position.constructor;
+    scene.solar.updateMatrixWorld(true);
+    sphere.updateMatrixWorld(true);
+    scene.camera.updateMatrixWorld(true);
+    const points=[];
+    const vertices=sphere.geometry.getAttribute('position');
+    for(let i=0;i<vertices.count;i++) {
+      const point=new Vector3().fromBufferAttribute(vertices,i).applyMatrix4(sphere.matrixWorld).project(scene.camera);
+      points.push({x:(point.x*.5+.5)*innerWidth,y:(-point.y*.5+.5)*innerHeight});
+    }
+    const xs=points.map(point=>point.x),ys=points.map(point=>point.y);
+    const actual={left:Math.min(...xs),right:Math.max(...xs),top:Math.min(...ys),bottom:Math.max(...ys),width:Math.max(...xs)-Math.min(...xs),height:Math.max(...ys)-Math.min(...ys)};
+    const center=sphere.getWorldPosition(new Vector3());
+    const radius=sphere.geometry.parameters.radius*sphere.getWorldScale(new Vector3()).x;
+    const angle25=25*Math.PI/180;
+    const cameraDistance=scene.camera.position.distanceTo(center);
+    const apparentRadius=Math.asin(radius/cameraDistance);
+    const content=document.querySelector('.study-page-content').getBoundingClientRect();
+    return {
+      bounds:actual,
+      apparentRatio:Math.tan(apparentRadius)/Math.tan(25*Math.PI/180),
+      contentLeft:content.left,
+    };
+  }, projectId);
+}
+
 try {
   {
     const {page, errors} = await openScenario({count:0, orbitCount:0});
@@ -242,19 +273,21 @@ try {
     }, 'the Sun is a flat yellow surface with a separate halo while cloud shading remains');
     assert.ok(Math.abs(stageEntryBounds.center.x - 360) < 2 && Math.abs(stageEntryBounds.center.y - 450) < 2,
       `zero-orbit catalog centers the Sun in the left subject slot: ${JSON.stringify(stageEntryBounds)}`);
-    assert.ok(Math.abs(stageEntryBounds.width - 270) < 2 && Math.abs(stageEntryBounds.height - 270) < 2,
-      `zero-orbit catalog projects a round 30vh Sun: ${JSON.stringify(stageEntryBounds)}`);
+    assert.ok(Math.abs(stageEntryBounds.width - 297) < 2 && Math.abs(stageEntryBounds.height - 297) < 2,
+      `zero-orbit catalog projects a round 33vh Sun: ${JSON.stringify(stageEntryBounds)}`);
     assert.ok(Math.abs(stageEntryBounds.width - stageEntryBounds.height) < 2,
       `zero-orbit catalog keeps the perspective-correct Sun silhouette circular: ${JSON.stringify(stageEntryBounds)}`);
-    assert.deepEqual(stageMiddle.camera, stageEntry.camera, 'camera composition is settled at the zero-orbit stage entry');
+    assert.ok(stageMiddle.camera.every((value,index) => Math.abs(value-stageEntry.camera[index])<1e-9), 'camera composition is settled at the zero-orbit stage entry');
     assert.deepEqual(stageMiddle.solarScale, stageEntry.solarScale, 'Sun scale stays fixed through the zero-orbit catalog stage');
     assert.equal(stageMiddle.sunMaterialColor, stageEntry.sunMaterialColor, 'the flat Sun color stays fixed through the zero-orbit catalog stage');
     assert.equal(stageMiddle.sunOpacity, stageEntry.sunOpacity, 'Sun stays fully bright throughout the zero-orbit catalog stage');
     assert.equal(stageEntry.sunOpacity, 1, 'Sun is fully bright when the zero-orbit stage begins');
     const stageEnd = await setStageProgress(page, .899);
     const stageEndBounds = await projectedSunBounds(page, .899);
-    assert.deepEqual(stageEnd.camera, stageEntry.camera, 'camera composition stays fixed until the zero-orbit stage ends');
-    assert.deepEqual(stageEndBounds, stageEntryBounds, 'the zero-orbit Sun projection stays fixed through .899');
+    assert.ok(stageEnd.camera.every((value,index) => Math.abs(value-stageEntry.camera[index])<1e-9), 'camera composition stays fixed until the zero-orbit stage ends');
+    assert.ok(Math.abs(stageEndBounds.center.x-stageEntryBounds.center.x)<.1 && Math.abs(stageEndBounds.center.y-stageEntryBounds.center.y)<.1
+      && Math.abs(stageEndBounds.width-stageEntryBounds.width)<.1 && Math.abs(stageEndBounds.height-stageEntryBounds.height)<.1,
+      'the zero-orbit Sun projection stays fixed through .899');
     assert.deepEqual(stageEnd.solarScale, stageEntry.solarScale, 'Sun scale stays fixed until the zero-orbit stage ends');
     assert.equal(stageEnd.sunOpacity, 1, 'Sun remains fully bright through the zero-orbit stage end');
     const zeroOrbitBoundary = await page.evaluate(() => {
@@ -319,8 +352,8 @@ try {
     const directSunBounds = await projectedSunBounds(page, .83);
     assert.ok(Math.abs(directSunBounds.center.x - 360) < 2 && Math.abs(directSunBounds.center.y - 450) < 2,
       `direct catalog entry puts the Sun in the left subject slot: ${JSON.stringify(directSunBounds)}`);
-    assert.ok(Math.abs(directSunBounds.width - 270) < 2 && Math.abs(directSunBounds.height - 270) < 2,
-      `direct catalog entry projects a round 30vh Sun: ${JSON.stringify(directSunBounds)}`);
+    assert.ok(Math.abs(directSunBounds.width - 297) < 2 && Math.abs(directSunBounds.height - 297) < 2,
+      `direct catalog entry projects a round 33vh Sun: ${JSON.stringify(directSunBounds)}`);
     assert.ok(await page.evaluate(() => Boolean(document.querySelector('#project-mount').compareDocumentPosition(document.querySelector('#projects')) & Node.DOCUMENT_POSITION_FOLLOWING)), 'orbit chapters precede the catalog section');
     assert.deepEqual(await projectIds(page), ['Catalog_0', 'Catalog_1', 'Catalog_2', 'Catalog_3']);
 
@@ -411,8 +444,8 @@ try {
     const catalogBounds = await projectedSunBounds(page, .83);
     assert.ok(Math.abs(catalogBounds.center.x - 360) < 2 && Math.abs(catalogBounds.center.y - 450) < 2,
       `wide catalog centers the Sun at 25vw / 50vh: ${JSON.stringify(catalogBounds)}`);
-    assert.ok(Math.abs(catalogBounds.width - 270) < 2 && Math.abs(catalogBounds.height - 270) < 2,
-      `wide catalog projects a round Sun at the 30vh cap: ${JSON.stringify(catalogBounds)}`);
+    assert.ok(Math.abs(catalogBounds.width - 297) < 2 && Math.abs(catalogBounds.height - 297) < 2,
+      `wide catalog projects a round Sun at the 33vh cap: ${JSON.stringify(catalogBounds)}`);
     assert.ok(Math.abs(catalogBounds.width - catalogBounds.height) < 2,
       `wide catalog uses the perspective-correct sphere silhouette: ${JSON.stringify(catalogBounds)}`);
 
@@ -551,7 +584,7 @@ try {
     await page.close();
   }
 
-  for (const viewport of [{width:1024, height:768}, {width:390, height:844}, {width:844, height:390}]) {
+  for (const viewport of [{width:1440,height:900},{width:1024,height:768},{width:390,height:844},{width:844,height:390}]) {
     const {page, errors} = await openScenario({count:5, orbitCount:0, viewport});
     const layout = await page.evaluate(() => ({
       columns:getComputedStyle(document.querySelector('#project-catalog-grid')).gridTemplateColumns.split(' ').length,
@@ -560,21 +593,41 @@ try {
     }));
     const sun = await projectedSunBounds(page, .535);
     const catalogBox = await page.locator('.project-index').boundingBox();
-    const maxDiameter = Math.min(viewport.height * .30, viewport.width * .50);
-    assert.equal(layout.columns, 1, `${viewport.width}px layout uses one column`);
+    const stacked = viewport.width <= 760 && viewport.height > 500;
+    const subjectWidth = stacked ? viewport.width*.50 : viewport.width*.50-Math.min(24,viewport.width*.04)*2;
+    const maxDiameter = Math.min(viewport.height*.33, subjectWidth);
+    const priorDiameter = Math.min(viewport.height*.30, subjectWidth);
+    const catalogLayout = await page.locator('.project-index').evaluate(node => {
+      const rect=node.getBoundingClientRect();
+      const expectedGutter=parseFloat(getComputedStyle(document.querySelector('.masthead')).paddingLeft);
+      return {x:rect.x,right:rect.right,expectedGutter};
+    });
+    assert.equal(layout.columns, viewport.width>1200 ? 2 : 1, `${viewport.width}px catalog uses the expected responsive column count`);
     assert.ok(layout.scrollWidth <= layout.innerWidth, `${viewport.width}px layout has no horizontal overflow`);
     assert.ok(Math.abs(sun.width - sun.height) < 2, `${viewport.width}px Sun remains circular: ${JSON.stringify(sun)}`);
-    assert.ok(sun.width <= maxDiameter + 2, `${viewport.width}px Sun fits the viewport size cap: ${JSON.stringify(sun)}`);
+    assert.ok(Math.abs(sun.width-maxDiameter)<2, `${viewport.width}px Sun reaches its clamped .33h/.50w surface target: ${JSON.stringify({sun,maxDiameter})}`);
+    const sunGrowth=sun.width/priorDiameter;
+    if (maxDiameter/priorDiameter >= 1.08) {
+      assert.ok(sunGrowth>=1.08 && sunGrowth<=1.12, `${viewport.width}px Sun surface grows 1.10x excluding its halo: ${JSON.stringify({sun,sunGrowth,priorDiameter,maxDiameter})}`);
+    } else {
+      assert.ok(Math.abs(sunGrowth-1)<.02, `${viewport.width}px width cap preserves the prior Sun size: ${JSON.stringify({sun,sunGrowth})}`);
+    }
     if (viewport.width === 390) {
       assert.ok(Math.abs(sun.center.x - viewport.width * .5) < 2 && Math.abs(sun.center.y - viewport.height * .24) < 2,
         `portrait Sun centers above the catalog: ${JSON.stringify(sun)}`);
-      assert.ok(catalogBox && sun.bottom + 16 < catalogBox.y,
+      assert.ok(catalogBox && catalogBox.y-sun.bottom >= Math.max(24,viewport.width*.03),
         `portrait Sun clears the catalog heading: ${JSON.stringify({sun,catalogBox})}`);
+      assert.ok(Math.abs(catalogLayout.x-catalogLayout.expectedGutter)<1 && Math.abs(viewport.width-catalogLayout.right-catalogLayout.expectedGutter)<1,
+        `portrait catalog remains stacked within its safe gutters: ${JSON.stringify(catalogLayout)}`);
     } else {
       assert.ok(Math.abs(sun.center.x - viewport.width * .25) < 2 && Math.abs(sun.center.y - viewport.height * .5) < 2,
         `split-layout Sun sits in the left subject slot: ${JSON.stringify(sun)}`);
-      assert.ok(sun.right + 12 < viewport.width * .51,
-        `split-layout Sun clears the right catalog: ${JSON.stringify(sun)}`);
+      assert.ok(catalogBox && Math.abs(catalogBox.x-viewport.width*.48)<1,
+        `split-layout catalog starts at 48vw: ${JSON.stringify({catalogBox,viewport})}`);
+      assert.ok(Math.abs(viewport.width-catalogLayout.right-catalogLayout.expectedGutter)<1,
+        `split-layout catalog keeps the right safe-area gutter: ${JSON.stringify(catalogLayout)}`);
+      assert.ok(catalogBox && catalogBox.x-sun.right >= Math.max(24,viewport.width*.03),
+        `split-layout Sun clears the right catalog: ${JSON.stringify({sun,catalogBox})}`);
     }
     const arrivalBounds = await projectedEarthBounds(page, .922);
     const zoomMiddleBounds = await projectedEarthBounds(page, .926);
@@ -601,6 +654,29 @@ try {
     await page.close();
     assert.deepEqual(errors, []);
     console.log(`PASS catalog responsive layout ${viewport.width}x${viewport.height}: ${JSON.stringify(layout)}`);
+
+    const focusScenario=await openScenario({count:5,orbitCount:1,viewport});
+    await focusScenario.page.evaluate(() => document.querySelector('#project-card-Catalog_0 .project-card-action').click());
+    await focusScenario.page.waitForFunction(() => document.querySelector('#project-detail dialog')?.open);
+    await focusScenario.page.evaluate(() => {
+      const scene=window.__journeyScene;
+      scene.setPaused(false);
+      scene.setReducedMotion(true);
+      scene.setProjectFocus('Catalog_0');
+      scene.frame(performance.now());
+    });
+    const planet=await projectedPlanetBounds(focusScenario.page,'Catalog_0');
+    assert.ok(Math.abs(planet.bounds.right-viewport.width*.42)<Math.max(4,viewport.width*.005),
+      `${viewport.width}px focused planet right limb sits at 42vw: ${JSON.stringify(planet)}`);
+    assert.ok(planet.bounds.left<0,`${viewport.width}px focused planet keeps the intended left crop: ${JSON.stringify(planet)}`);
+    assert.ok(planet.apparentRatio>=1.08 && planet.apparentRatio<=1.12,
+      `${viewport.width}px focused planet surface grows 1.10x from its old 25-degree frame: ${JSON.stringify(planet)}`);
+    if (viewport.width>760) {
+      assert.ok(planet.contentLeft-planet.bounds.right>=Math.max(24,viewport.width*.03),
+        `${viewport.width}px focused planet clears reader copy: ${JSON.stringify(planet)}`);
+    }
+    await focusScenario.page.close();
+    assert.deepEqual(focusScenario.errors,[]);
   }
 
   {

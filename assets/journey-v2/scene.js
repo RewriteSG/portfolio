@@ -390,9 +390,10 @@ export class JourneyScene {
       this.solar.updateMatrixWorld(true);
       const center = planet.getWorldPosition(new THREE.Vector3());
       const radius = planet.geometry.parameters.radius * planet.getWorldScale(new THREE.Vector3()).x;
-      // Place the actual planet's right limb at 10% of the viewport.
-      const angularRadius = THREE.MathUtils.degToRad(25);
-      const rightAngle = Math.atan(-.8 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * this.camera.aspect);
+      // Place the actual planet's right limb at 42% of the viewport.
+      const angularRadius = Math.atan(1.1 * Math.tan(THREE.MathUtils.degToRad(25)));
+      const rightLimbNdcX = .42 * 2 - 1;
+      const rightAngle = Math.atan(rightLimbNdcX * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * this.camera.aspect);
       const centerAngle = rightAngle - angularRadius;
       const distance = radius / Math.sin(angularRadius);
       this.camera.position.set(center.x - distance * Math.sin(centerAngle), center.y, center.z + distance * Math.cos(centerAngle));
@@ -518,7 +519,7 @@ export class JourneyScene {
       : solar;
     const orbitScale = lerp(1, .65, solar);
     const subjectWidth = stacked ? this.width * .5 : this.width * .5 - Math.min(24, this.width * .04) * 2;
-    const sunDiameter = Math.max(1, Math.min(this.height * .30, subjectWidth));
+    const sunDiameter = Math.max(1, Math.min(this.height * .33, subjectWidth));
     const fovTangent = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
     const centerX = stacked ? this.width * .5 : this.width * .25;
     const centerY = stacked ? this.height * .24 : this.height * .5;
