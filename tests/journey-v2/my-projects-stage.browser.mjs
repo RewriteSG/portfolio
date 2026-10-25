@@ -37,8 +37,9 @@ function readStageState(page) {
   return page.evaluate(() => {
     const scene = window.__journeyScene;
     const state = scene.getDebugState();
-    const {projectsStageStart:start, projectsStageEnd:end} = scene.projectLayout;
+    const {catalogCameraStart, projectsStageStart:start, projectsStageEnd:end} = scene.projectLayout;
     return {
+      catalogCameraStart,
       progress:state.targetProgress,
       localProgress:(state.targetProgress - start) / (end - start),
       phase:state.phase,
@@ -204,6 +205,7 @@ try {
     assert.equal(await page.locator('#project-catalog-page-status').innerText(), 'No projects to show yet.');
     assert.deepEqual(await page.evaluate(() => ({orbit:window.__journeyProjects.presentation.orbitCount, chapters:window.__journeyProjects.presentation.chapters.length, details:window.__journeyProjects.presentation.details.length})), {orbit:0, chapters:0, details:0});
     const zeroOrbitStage = await readStageState(page);
+    assert.equal(zeroOrbitStage.catalogCameraStart, .48, 'zero-orbit camera handoff starts at .48');
     assert.ok(Math.abs(zeroOrbitStage.progress - .535) < .0001, `zero-orbit catalog starts at .535, received ${zeroOrbitStage.progress}`);
     assert.ok(await page.evaluate(() => Boolean(document.querySelector('#project-mount').compareDocumentPosition(document.querySelector('#projects')) & Node.DOCUMENT_POSITION_FOLLOWING)), 'the orbit mount precedes the catalog stage in DOM order');
     assert.deepEqual(errors, []);
@@ -310,6 +312,7 @@ try {
     const {page, errors} = await openScenario({count:13, orbitCount:1});
     assert.deepEqual(await page.evaluate(() => ({orbit:window.__journeyProjects.presentation.orbitCount, chapters:window.__journeyProjects.presentation.chapters.length, controls:window.__journeyProjects.presentation.controls.length, details:window.__journeyProjects.presentation.details.length})), {orbit:1, chapters:1, controls:1, details:13});
     const directStage = await readStageState(page);
+    assert.equal(directStage.catalogCameraStart, .818, 'orbit camera handoff starts at .818');
     assert.ok(Math.abs(directStage.progress - .83) < .0001, `direct #projects hash starts after the featured orbit at .83, received ${directStage.progress}`);
     assert.equal(directStage.sunMaterialType, 'MeshBasicMaterial', 'direct catalog entry uses a flat Sun surface');
     assert.equal(directStage.sunMaterialColor, 0xffd8a0);

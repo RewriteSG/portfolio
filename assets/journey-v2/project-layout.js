@@ -31,6 +31,7 @@ export function buildProjectLayout(projectIds = []) {
     intervals,
     chapterStart:START,
     chapterEnd:END,
+    catalogCameraStart:count ? .818 : .48,
     projectsStageStart:count ? END : .535,
     projectsStageEnd:RETURN_START,
     returnStart:RETURN_START,
@@ -63,8 +64,28 @@ export function sceneScrollRange(start, end, fade = 0) {
   };
 }
 
-/** Add enough root-scroll distance to reveal each panel's full overflow. */
-export function buildScrollMetrics(_layout, viewportHeight, panelMetrics = []) {
+function buildSegments(baseline, demands) {
+  const boundaries = [...new Set([0, 1, ...demands.flatMap(({start, end}) => [start, end])])].sort((a, b) => a - b);
+  const segments = [];
+  let total = 0;
+  for (let index = 0; index < boundaries.length - 1; index++) {
+    const start = boundaries[index];
+    const end = boundaries[index + 1];
+    const span = end - start;
+    let length = baseline * span;
+    demands.forEach(demand => {
+      const overlap = Math.max(0, Math.min(end, demand.end) - Math.max(start, demand.start));
+      if (overlap) length += demand.extra * overlap / (demand.end - demand.start);
+    });
+    const scrollStart = total;
+    total += length;
+    segments.push({start, end, scrollStart, scrollEnd:total});
+  }
+  return {segments, total};
+}
+
+/** Compose panel requirements, then top up the two named camera intervals. */
+export function buildScrollMetrics(layout, viewportHeight, panelMetrics = []) {
   const height = Math.max(1, viewportHeight);
   const baseline = Math.max(6500, 16 * height) - height;
   const demands = (Array.isArray(panelMetrics) ? panelMetrics : []).flatMap(panel => {
@@ -84,23 +105,27 @@ export function buildScrollMetrics(_layout, viewportHeight, panelMetrics = []) {
     return [{start:from, end:to, extra:Math.max(0, Math.max(contentDuration, minimumDuration) - baseDuration)}];
   });
 
-  const boundaries = [...new Set([0, 1, ...demands.flatMap(({start, end}) => [start, end])])].sort((a, b) => a - b);
-  const segments = [];
-  let total = 0;
-  for (let index = 0; index < boundaries.length - 1; index++) {
-    const start = boundaries[index];
-    const end = boundaries[index + 1];
-    const span = end - start;
-    let length = baseline * span;
-    demands.forEach(demand => {
-      const overlap = Math.max(0, Math.min(end, demand.end) - Math.max(start, demand.start));
-      if (overlap) length += demand.extra * overlap / (demand.end - demand.start);
-    });
-    const scrollStart = total;
-    total += length;
-    segments.push({start, end, scrollStart, scrollEnd:total});
+  let metrics = buildSegments(baseline, demands);
+  const floor = 1.5 * height;
+  const intervals = [
+    [layout?.catalogCameraStart, layout?.projectsStageStart],
+    [layout?.returnStart, layout?.returnEnd],
+  ];
+  for (const [rawStart, rawEnd] of intervals) {
+    const start = Number(rawStart);
+    const end = Number(rawEnd);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+    const from = clamp(start);
+    const to = clamp(end);
+    if (to <= from) continue;
+    const existingDistance = scrollAtProgress(metrics, to) - scrollAtProgress(metrics, from);
+    const deficit = Math.max(0, floor - existingDistance);
+    if (deficit > 0) {
+      demands.push({start:from, end:to, extra:deficit});
+      metrics = buildSegments(baseline, demands);
+    }
   }
-  return {segments, total};
+  return metrics;
 }
 
 export function progressAtScroll(metrics, scroll) {

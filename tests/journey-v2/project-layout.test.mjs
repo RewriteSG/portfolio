@@ -11,6 +11,7 @@ for (const count of [0, 1, 3, 8, 64]) {
     assert.equal(layout.chapterStart, .565);
     assert.equal(layout.chapterEnd, .83);
     assert.equal(layout.projectsStageStart, count ? .83 : .535);
+    assert.equal(layout.catalogCameraStart, count ? .818 : .48);
     assert.equal(layout.projectsStageEnd, .90);
     assert.equal(layout.returnStart, .90);
     assert.equal(layout.catalogFadeEnd, .91);
@@ -56,6 +57,58 @@ for (const count of [0, 1, 3, 8, 64]) {
     assert.equal(progressAtScroll(metrics, Infinity), 1);
   });
 }
+
+for (const count of [0, 1, 3]) {
+  for (const height of [390, 768, 900]) {
+    test(`${count} projects at ${height}px keep both camera intervals at least 1.5 viewport heights`, () => {
+      const layout = buildProjectLayout(Array.from({length:count}, (_, i) => `handoff-${i}`));
+      const panels = layout.intervals.map(interval => ({...interval, overflow:1400, minimumDuration:810}));
+      const metrics = buildScrollMetrics(layout, height, panels);
+      const floor = 1.5 * height;
+      const span = (start, end) => scrollAtProgress(metrics, end) - scrollAtProgress(metrics, start);
+
+      assert.equal(layout.catalogCameraStart, count ? .818 : .48);
+      assert.equal(layout.projectsStageStart, count ? .83 : .535);
+      assert.ok(span(layout.catalogCameraStart, layout.projectsStageStart) >= floor - 1e-7,
+        `catalog camera span ${span(layout.catalogCameraStart, layout.projectsStageStart)} is below ${floor}`);
+      assert.ok(span(.90, .94) >= floor - 1e-7,
+        `return camera span ${span(.90, .94)} is below ${floor}`);
+      for (const progress of [layout.catalogCameraStart, layout.projectsStageStart, .90, .91, .922, .93, .94]) {
+        assert.ok(Math.abs(progressAtScroll(metrics, scrollAtProgress(metrics, progress)) - progress) < 1e-12,
+          `progress round-trips at ${progress}`);
+      }
+    });
+  }
+}
+
+test('catalog camera top-up composes with overlapping final orbit content by max, not addition', () => {
+  const height = 900;
+  const floor = 1.5 * height;
+  const layout = buildProjectLayout(['first', 'second', 'last']);
+  const panel = {...layout.intervals.at(-1), minimumDuration:0};
+  const baseline = Math.max(6500, 16 * height) - height;
+  const cameraStart = layout.catalogCameraStart;
+  const stageStart = layout.projectsStageStart;
+  const span = panel.end - panel.start;
+  const contentRange = sceneScrollRange(panel.start, panel.end, panel.fade);
+  const visibleShare = (contentRange.end - contentRange.start) / span;
+
+  for (const overflow of [0, 10000]) {
+    const contentDuration = overflow / visibleShare;
+    const extra = Math.max(0, contentDuration - baseline * span);
+    const overlap = Math.max(0, Math.min(stageStart, panel.end) - Math.max(cameraStart, panel.start));
+    const contentOnlyDistance = baseline * (stageStart - cameraStart) + extra * overlap / span;
+    const metrics = buildScrollMetrics(layout, height, [{...panel, overflow}]);
+    const finalDistance = scrollAtProgress(metrics, stageStart) - scrollAtProgress(metrics, cameraStart);
+
+    assert.equal(contentOnlyDistance < floor, overflow === 0, 'fixture exercises both sides of the 1.5× floor');
+    assert.ok(Math.abs(finalDistance - Math.max(contentOnlyDistance, floor)) < 1e-7,
+      `final span ${finalDistance} should equal max(${contentOnlyDistance}, ${floor})`);
+    for (const progress of [cameraStart, stageStart]) {
+      assert.ok(Math.abs(progressAtScroll(metrics, scrollAtProgress(metrics, progress)) - progress) < 1e-12);
+    }
+  }
+});
 
 test('scene scroll ranges leave fade room and add root-scroll distance for overflowing copy', () => {
   const aboutRange = sceneScrollRange(.22, .48, .025);
