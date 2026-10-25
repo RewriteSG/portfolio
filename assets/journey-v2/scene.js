@@ -619,11 +619,12 @@ export class JourneyScene {
     });
     this.city.group.visible = p > this.projectLayout.returnEnd - .002;
     if (this.city.group.visible) this.city.update(this.time, this.reducedMotion);
-    const cityBlend = smooth(this.projectLayout.returnStart, this.projectLayout.returnEnd, p);
-    this.scene.background.set(0x050711).lerp(new THREE.Color(0xbccfcf), cityBlend);
-    this.distantStars.visible = cityBlend < .999;
-    this.distantStars.material.opacity = .66 * (1 - cityBlend);
-    this.cloudCover = smooth(this.projectLayout.earthZoomStart, this.projectLayout.earthZoomEnd, p)
+    const cloudReveal = smooth(this.projectLayout.earthZoomStart, this.projectLayout.earthZoomEnd, p);
+    this.scene.background.set(0x050711).lerp(new THREE.Color(0xbccfcf), cloudReveal);
+    const starFade = smooth(this.projectLayout.returnStart, this.projectLayout.returnEnd, p);
+    this.distantStars.visible = starFade < .999;
+    this.distantStars.material.opacity = .66 * (1 - starFade);
+    this.cloudCover = cloudReveal
       * (1 - smooth(this.projectLayout.returnEnd, .976, p));
     this.cloudPass.visible = this.cloudCover > .001;
     this.cloudMaterial.uniforms.uCover.value = this.cloudCover;

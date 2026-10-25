@@ -38,6 +38,7 @@ function readStageState(page) {
   return page.evaluate(() => {
     const scene = window.__journeyScene;
     const state = scene.getDebugState();
+    const background = scene.scene.background;
     const {catalogCameraStart, projectsStageStart:start, projectsStageEnd:end} = scene.projectLayout;
     return {
       catalogCameraStart,
@@ -57,6 +58,10 @@ function readStageState(page) {
       haloColor:scene.solar.children.find(child => child.isSprite && child.material.color.getHex() === 0xffcf88)?.material.color.getHex() ?? null,
       cloudMaterialType:scene.cloudMaterial.type,
       cloudCover:state.cloudCover,
+      backgroundHex:background.getHex(),
+      backgroundColor:[background.r, background.g, background.b],
+      distantStarOpacity:scene.distantStars.material.opacity,
+      distantStarsVisible:scene.distantStars.visible,
       cityVisible:state.cityVisible,
       earthVisible:state.earthVisible,
       returnPhases:{
@@ -69,6 +74,26 @@ function readStageState(page) {
       },
     };
   });
+}
+
+function readBackdropMidpoint(page) {
+  return page.evaluate(() => {
+    const current = window.__journeyScene.scene.background;
+    const expected = current.clone().set(0x050711)
+      .lerp(new current.constructor(0xbccfcf), .5);
+    return [expected.r, expected.g, expected.b];
+  });
+}
+
+function expectedDistantStarOpacity(progress) {
+  const t = Math.max(0, Math.min(1, (progress - .90) / (.94 - .90)));
+  const cityBlend = t * t * (3 - 2 * t);
+  return .66 * (1 - cityBlend);
+}
+
+function assertColorClose(actual, expected, label, tolerance = .000001) {
+  assert.ok(actual.every((component, index) => Math.abs(component - expected[index]) < tolerance),
+    `${label}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
 }
 
 async function readCameraScrollSpans(page, {floorBinding = false} = {}) {
@@ -407,11 +432,29 @@ try {
     for (const progress of [.90, .922, .924, .925, .926]) {
       assert.equal(forwardCloudStates.get(progress).cloudCover, 0, `cloud cover remains absent through ${progress}`);
     }
+    for (const progress of [.90, .922, .925, .926]) {
+      assert.equal(forwardCloudStates.get(progress).backgroundHex, 0x050711,
+        `space backdrop remains exact through ${progress}`);
+    }
+    const midpointColor = await readBackdropMidpoint(page);
+    assertColorClose(forwardCloudStates.get(.928).backgroundColor, midpointColor,
+      'backdrop uses the Three.Color linear-space midpoint at .928');
     assert.ok(Math.abs(forwardCloudStates.get(.928).cloudCover - .5) < .001,
       'cloud cover follows the midpoint of the Earth zoom at .928');
     for (const progress of [.93, .938, .94]) {
       assert.ok(Math.abs(forwardCloudStates.get(progress).cloudCover - 1) < .001,
         `cloud cover is full at ${progress}`);
+    }
+    for (const progress of [.93, .938, .94, .958, .976]) {
+      assert.equal(forwardCloudStates.get(progress).backgroundHex, 0xbccfcf,
+        `city backdrop stays exact through the cloud hold/fade at ${progress}`);
+    }
+    for (const progress of cloudCheckpoints) {
+      const state = forwardCloudStates.get(progress);
+      assert.ok(Math.abs(state.distantStarOpacity - expectedDistantStarOpacity(progress)) < .000001,
+        `distant stars retain their independent .90–.94 fade at ${progress}`);
+      assert.equal(state.distantStarsVisible, progress < .94,
+        `distant-star visibility retains its .94 boundary at ${progress}`);
     }
     assert.equal(forwardCloudStates.get(.938).earthVisible, true, 'Earth remains the visible scene through the covered hold');
     assert.equal(forwardCloudStates.get(.938).cityVisible, false, 'city remains hidden until the covered .94 arrival');
@@ -428,6 +471,12 @@ try {
       const reverse = await setStageProgress(page, progress);
       assert.equal(reverse.cloudCover, forwardCloudStates.get(progress).cloudCover,
         `reverse scrub restores the same cloud cover at ${progress}`);
+      assert.equal(reverse.backgroundHex, forwardCloudStates.get(progress).backgroundHex,
+        `reverse scrub restores the same backdrop at ${progress}`);
+      assertColorClose(reverse.backgroundColor, forwardCloudStates.get(progress).backgroundColor,
+        `reverse scrub restores the same backdrop color at ${progress}`);
+      assert.equal(reverse.distantStarOpacity, forwardCloudStates.get(progress).distantStarOpacity,
+        `reverse scrub restores the same star opacity at ${progress}`);
       assert.deepEqual(reverse.camera, forwardCloudStates.get(progress).camera,
         `reverse scrub restores the same camera pose at ${progress}`);
     }
@@ -792,6 +841,12 @@ try {
         'mobile viewport resize preserves normalized Earth-zoom progress');
       assert.ok(Math.abs(afterViewportResize.cloudCover - zoomState.cloudCover) < .001,
         'mobile viewport resize preserves synchronized cloud cover');
+      assertColorClose(afterViewportResize.backgroundColor, zoomState.backgroundColor,
+        'mobile viewport resize preserves the backdrop color at .928', .0002);
+      assert.equal(afterViewportResize.backgroundHex, zoomState.backgroundHex,
+        'mobile viewport resize preserves the backdrop endpoint/interpolation state');
+      assert.ok(Math.abs(afterViewportResize.distantStarOpacity - zoomState.distantStarOpacity) < .0001,
+        'mobile viewport resize preserves independent distant-star opacity');
       await page.setViewportSize(viewport);
     }
     await setStageProgress(page, .535);
@@ -904,6 +959,7 @@ try {
     });
     const reducedStart = await setStageProgress(page, .90);
     const reducedArrival = await setStageProgress(page, .922);
+    const reducedZoomStart = await setStageProgress(page, .926);
     const reducedZoomEnd = await setStageProgress(page, .93);
     assert.equal(reducedStart.reducedMotion, true);
     assert.equal(reducedStart.animationRunning, false);
@@ -913,15 +969,28 @@ try {
     assert.deepEqual(reducedZoomEnd.camera, reducedStart.camera, 'reduced motion does not animate the Earth zoom');
     assert.equal(reducedStart.cloudCover, 0, 'reduced motion starts with the veil hidden');
     assert.equal(reducedArrival.cloudCover, 0, 'reduced motion keeps the veil hidden through arrival');
+    assert.equal(reducedZoomStart.cloudCover, 0, 'reduced motion keeps the veil hidden at zoom start');
     assert.equal(reducedZoomEnd.cloudCover, 0, 'reduced motion does not animate the veil with the zoom');
+    for (const state of [reducedStart, reducedArrival, reducedZoomStart, reducedZoomEnd]) {
+      assert.equal(state.backgroundHex, 0x050711, 'reduced motion holds the exact space backdrop before .94');
+      assert.equal(state.distantStarOpacity, .66, 'reduced motion preserves the space star opacity before .94');
+    }
     assert.deepEqual(await readCatalogVisibility(page), {opacity:1, inert:false, ariaHidden:'false'}, 'reduced motion keeps the complete catalog static before .94');
     const reducedBeforeSnap = await setStageProgress(page, .939);
     assert.deepEqual(reducedBeforeSnap.camera, reducedStart.camera, 'reduced-motion camera remains static through .939');
     assert.equal(reducedBeforeSnap.cloudCover, 0, 'reduced-motion veil remains hidden through .939');
+    assert.equal(reducedBeforeSnap.backgroundHex, 0x050711, 'reduced motion holds the space backdrop through .939');
+    assert.equal(reducedBeforeSnap.distantStarOpacity, .66, 'reduced motion keeps stars on their adjusted-progress curve through .939');
     const reducedContact = await setStageProgress(page, .94);
+    const reducedEnd = await setStageProgress(page, .976);
     assert.equal(reducedContact.phase, 'city', 'reduced motion snaps to the Contact/city pose at .94');
     assert.notDeepEqual(reducedContact.camera, reducedStart.camera, 'the Contact/city pose is reached by a snap, not animated travel');
     assert.equal(reducedContact.cloudCover, 0, 'reduced motion does not cover the snapped Contact/city scene');
+    assert.equal(reducedContact.backgroundHex, 0xbccfcf, 'reduced motion snaps to the exact city backdrop at .94');
+    assert.equal(reducedContact.distantStarOpacity, 0, 'reduced motion completes the independent star fade at the city snap');
+    assert.equal(reducedEnd.cloudCover, 0, 'reduced motion keeps the veil hidden through .976');
+    assert.equal(reducedEnd.backgroundHex, 0xbccfcf, 'reduced motion holds the exact city backdrop through .976');
+    assert.equal(reducedEnd.distantStarOpacity, 0, 'reduced motion keeps distant stars hidden through .976');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'scroll-cue', 'reduced-motion focus transfers immediately before the .94 snap');
     assert.equal(await page.evaluate(() => scrollY), reducedScrollBeforeSnap, 'reduced-motion focus transfer does not change scroll position');
     assert.deepEqual(errors, []);
