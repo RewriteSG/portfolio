@@ -594,9 +594,10 @@ try {
     const sun = await projectedSunBounds(page, .535);
     const catalogBox = await page.locator('.project-index').boundingBox();
     const stacked = viewport.width <= 760 && viewport.height > 500;
-    const subjectWidth = stacked ? viewport.width*.50 : viewport.width*.50-Math.min(24,viewport.width*.04)*2;
+    const subjectWidth = stacked ? viewport.width*.55 : viewport.width*.50-Math.min(24,viewport.width*.04)*2;
+    const priorSubjectWidth = stacked ? viewport.width*.50 : subjectWidth;
     const maxDiameter = Math.min(viewport.height*.33, subjectWidth);
-    const priorDiameter = Math.min(viewport.height*.30, subjectWidth);
+    const priorDiameter = Math.min(viewport.height*.30, priorSubjectWidth);
     const catalogLayout = await page.locator('.project-index').evaluate(node => {
       const rect=node.getBoundingClientRect();
       const expectedGutter=parseFloat(getComputedStyle(document.querySelector('.masthead')).paddingLeft);
@@ -605,7 +606,7 @@ try {
     assert.equal(layout.columns, viewport.width>1200 ? 2 : 1, `${viewport.width}px catalog uses the expected responsive column count`);
     assert.ok(layout.scrollWidth <= layout.innerWidth, `${viewport.width}px layout has no horizontal overflow`);
     assert.ok(Math.abs(sun.width - sun.height) < 2, `${viewport.width}px Sun remains circular: ${JSON.stringify(sun)}`);
-    assert.ok(Math.abs(sun.width-maxDiameter)<2, `${viewport.width}px Sun reaches its clamped .33h/.50w surface target: ${JSON.stringify({sun,maxDiameter})}`);
+    assert.ok(Math.abs(sun.width-maxDiameter)<2, `${viewport.width}px Sun reaches its clamped .33h/.55w surface target: ${JSON.stringify({sun,maxDiameter})}`);
     const sunGrowth=sun.width/priorDiameter;
     if (maxDiameter/priorDiameter >= 1.08) {
       assert.ok(sunGrowth>=1.08 && sunGrowth<=1.12, `${viewport.width}px Sun surface grows 1.10x excluding its halo: ${JSON.stringify({sun,sunGrowth,priorDiameter,maxDiameter})}`);
@@ -626,7 +627,7 @@ try {
         `split-layout catalog starts at 48vw: ${JSON.stringify({catalogBox,viewport})}`);
       assert.ok(Math.abs(viewport.width-catalogLayout.right-catalogLayout.expectedGutter)<1,
         `split-layout catalog keeps the right safe-area gutter: ${JSON.stringify(catalogLayout)}`);
-      assert.ok(catalogBox && catalogBox.x-sun.right >= Math.max(24,viewport.width*.03),
+      assert.ok(catalogBox && catalogBox.x-sun.right >= viewport.width*.06-2,
         `split-layout Sun clears the right catalog: ${JSON.stringify({sun,catalogBox})}`);
     }
     const arrivalBounds = await projectedEarthBounds(page, .922);
@@ -672,8 +673,8 @@ try {
     assert.ok(planet.apparentRatio>=1.08 && planet.apparentRatio<=1.12,
       `${viewport.width}px focused planet surface grows 1.10x from its old 25-degree frame: ${JSON.stringify(planet)}`);
     if (viewport.width>760) {
-      assert.ok(planet.contentLeft-planet.bounds.right>=Math.max(24,viewport.width*.03),
-        `${viewport.width}px focused planet clears reader copy: ${JSON.stringify(planet)}`);
+      assert.ok(planet.contentLeft-planet.bounds.right>=viewport.width*.06-2,
+        `${viewport.width}px focused planet keeps the 6vw reader-copy gap: ${JSON.stringify(planet)}`);
     }
     await focusScenario.page.close();
     assert.deepEqual(focusScenario.errors,[]);

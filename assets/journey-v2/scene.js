@@ -518,7 +518,7 @@ export class JourneyScene {
       ? smooth(this.projectLayout.projectsStageStart - .012, this.projectLayout.projectsStageStart, p) * (1 - returnTravel)
       : solar;
     const orbitScale = lerp(1, .65, solar);
-    const subjectWidth = stacked ? this.width * .5 : this.width * .5 - Math.min(24, this.width * .04) * 2;
+    const subjectWidth = stacked ? this.width * .55 : this.width * .5 - Math.min(24, this.width * .04) * 2;
     const sunDiameter = Math.max(1, Math.min(this.height * .33, subjectWidth));
     const fovTangent = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
     const centerX = stacked ? this.width * .5 : this.width * .25;

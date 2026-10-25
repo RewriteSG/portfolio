@@ -165,7 +165,7 @@ try {
     assert.ok(planet.apparentRatio>=1.08 && planet.apparentRatio<=1.12,`${viewport.width}px focused planet apparent size is 1.10x the old 25-degree framing: ${JSON.stringify(planet)}`);
     if (viewport.width > 760) {
       const subjectGap=layout.x-planet.bounds.right;
-      assert.ok(subjectGap>=Math.max(24,viewport.width*.03),`${viewport.width}px focused planet clears reader copy: ${JSON.stringify({subjectGap,planet,layout})}`);
+      assert.ok(subjectGap>=viewport.width*.06-2,`${viewport.width}px focused planet keeps the 6vw reader-copy gap: ${JSON.stringify({subjectGap,planet,layout})}`);
     }
     console.log(`PASS project reader ${viewport.width}x${viewport.height}: ${JSON.stringify({layout,planet})}`);
     await page.close();
