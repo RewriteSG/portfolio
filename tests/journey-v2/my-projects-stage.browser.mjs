@@ -96,6 +96,52 @@ function readReturnInkState(page) {
   });
 }
 
+function readCityChromeState(page) {
+  return page.evaluate(() => {
+    const style = selector => getComputedStyle(document.querySelector(selector));
+    const values = selector => {
+      const current = style(selector);
+      return {
+        color:current.color,
+        opacity:Number(current.opacity),
+        display:current.display,
+        outlineColor:current.outlineColor,
+        backgroundColor:current.backgroundColor,
+      };
+    };
+    return {
+      returnInk:document.body.classList.contains('is-return-city-ink'),
+      contact:document.body.classList.contains('is-contact'),
+      masthead:values('.masthead'),
+      wordmark:values('.wordmark'),
+      navLink:values('.main-nav > a[href="#contact"]'),
+      menuToggle:values('#menu-toggle'),
+      caption:values('.identity-caption'),
+      footer:values('.journey-footer'),
+      footerPlace:values('.footer-place'),
+      sceneLabel:values('.scene-label'),
+      scrollCue:values('.scroll-cue'),
+      coordinate:values('.footer-place > span'),
+      menu:values('.more-menu'),
+      menuAction:values('#reading-toggle'),
+    };
+  });
+}
+
+function readFocusedControlState(page) {
+  return page.evaluate(() => {
+    const current = document.activeElement;
+    const style = getComputedStyle(current);
+    return {
+      id:current.id,
+      href:current.getAttribute('href'),
+      focusVisible:current.matches(':focus-visible'),
+      outlineColor:style.outlineColor,
+      outlineStyle:style.outlineStyle,
+    };
+  });
+}
+
 function readBackdropMidpoint(page) {
   return page.evaluate(() => {
     const current = window.__journeyScene.scene.background;
@@ -969,11 +1015,11 @@ try {
     assert.equal(contrastForward.get(.928).contact, false,
       `${viewport.width}x${viewport.height} leaves Contact inactive during the return ink band`);
     assert.equal(contrastForward.get(.928).title, 'rgb(35, 65, 57)');
-    assert.equal(contrastForward.get(.928).subtitle, 'rgb(61, 91, 80)');
-    assert.equal(contrastForward.get(.928).footer, 'rgb(66, 98, 83)');
-    assert.equal(contrastForward.get(.928).footerPlace, 'rgb(66, 98, 83)');
-    assert.equal(contrastForward.get(.928).sceneLabel, 'rgb(66, 98, 83)');
-    assert.equal(contrastForward.get(.928).scrollCue, 'rgb(66, 98, 83)');
+    assert.equal(contrastForward.get(.928).subtitle, 'rgb(24, 50, 41)');
+    assert.equal(contrastForward.get(.928).footer, 'rgb(24, 50, 41)');
+    assert.equal(contrastForward.get(.928).footerPlace, 'rgb(24, 50, 41)');
+    assert.equal(contrastForward.get(.928).sceneLabel, 'rgb(24, 50, 41)');
+    assert.equal(contrastForward.get(.928).scrollCue, 'rgb(24, 50, 41)');
     assert.equal(contrastForward.get(.928).progressFill, 'rgb(69, 111, 96)');
     const progressTrackChannels = contrastForward.get(.928).progressTrack.match(/[\d.]+/g).map(Number);
     assert.deepEqual(progressTrackChannels.slice(0, 3), [66, 98, 83],
@@ -982,6 +1028,8 @@ try {
       `${viewport.width}x${viewport.height} keeps the progress track translucent`);
     assert.equal(contrastForward.get(.938).active, true,
       `${viewport.width}x${viewport.height} retains city ink through .938`);
+    assert.equal(contrastForward.get(.938).subtitle, 'rgb(24, 50, 41)',
+      `${viewport.width}x${viewport.height} uses dark subtitle ink through .938`);
     assert.deepEqual(contrastForward.get(.938), contrastForward.get(.928),
       `${viewport.width}x${viewport.height} keeps the same contrast treatment through the band`);
     assert.equal(contrastForward.get(.94).active, false,
@@ -1006,6 +1054,7 @@ try {
         `390x844 root scroll retains city ink below .94: ${JSON.stringify(belowContact)}`);
       assert.equal(belowContact.contact, false,
         `390x844 Contact remains inactive below .94: ${JSON.stringify(belowContact)}`);
+      await setRootScrollProgress(page, .938, 'ceil');
       const aboveContact = await setRootScrollProgress(page, .94, 'ceil');
       assert.ok(aboveContact.expectedProgress >= .94,
         `390x844 ceil pixel reaches Contact at .94: ${JSON.stringify(aboveContact)}`);
@@ -1013,9 +1062,11 @@ try {
         `390x844 root scroll clears city ink at .94: ${JSON.stringify(aboveContact)}`);
       assert.equal(aboveContact.contact, true,
         `390x844 root scroll activates Contact at .94: ${JSON.stringify(aboveContact)}`);
-      const reverseContact = await setRootScrollProgress(page, .94, 'floor');
+      const reverseContact = await setRootScrollProgress(page, .938, 'ceil');
       assert.equal(reverseContact.returnInk, true,
         `390x844 reverse scrub restores city ink below .94: ${JSON.stringify(reverseContact)}`);
+      assert.equal(reverseContact.contact, false,
+        `390x844 reverse scrub restores the return state below .94: ${JSON.stringify(reverseContact)}`);
       const reverseCloud = await setRootScrollProgress(page, .928, 'ceil');
       assert.equal(reverseCloud.returnInk, true,
         `390x844 reverse scrub retains city ink above .928: ${JSON.stringify(reverseCloud)}`);
@@ -1188,6 +1239,193 @@ try {
     assert.deepEqual(errors, []);
     await page.close();
     console.log('PASS reduced motion holds the catalog camera until .94, then snaps to the city with focus preserved');
+  }
+
+  {
+    const paper = 'rgb(239, 244, 237)';
+    const darkCity = 'rgb(24, 50, 41)';
+    const contactCity = 'rgb(35, 65, 57)';
+    const contactFooter = 'rgb(61, 89, 79)';
+    const lightFocus = 'rgb(189, 243, 241)';
+    const contactFocus = 'rgb(33, 75, 62)';
+    const menuSurface = 'rgb(20, 38, 51)';
+    const viewports = [
+      {width:1440,height:900},
+      {width:1101,height:900},
+      {width:1100,height:900},
+      {width:412,height:844},
+      {width:390,height:844},
+      {width:844,height:390},
+    ];
+
+    for (const viewport of viewports) {
+      const {page, errors} = await openScenario({count:5,orbitCount:0,viewport});
+      const captionVisible = viewport.width > 760 && viewport.height > 500;
+      const coordinateVisible = viewport.width > 1100;
+      const snapshots = new Map();
+
+      const assertChromeAt = async progress => {
+        await setStageProgress(page, progress);
+        const state = await readCityChromeState(page);
+        const inBand = progress >= .928 && progress < .94;
+        const inContact = progress >= .94;
+        const mastheadInk = inBand ? darkCity : inContact ? contactCity : paper;
+        const footerInk = inBand ? darkCity : inContact ? contactFooter : 'rgb(196, 214, 215)';
+        const sceneLabelInk = inBand ? darkCity : inContact ? contactFooter : 'rgb(169, 190, 197)';
+        const scrollCueInk = inBand ? darkCity : inContact ? contactFooter : 'rgb(216, 231, 227)';
+        const captionInk = inBand || inContact ? darkCity : paper;
+        const expectedCaptionDisplay = captionVisible ? 'block' : 'none';
+        const coordinateInk = inBand || inContact ? darkCity : 'rgb(196, 214, 215)';
+
+        assert.equal(state.returnInk,inBand,`${viewport.width}x${viewport.height} return-ink band at ${progress}`);
+        assert.equal(state.contact,inContact,`${viewport.width}x${viewport.height} Contact state at ${progress}`);
+        assert.equal(state.masthead.color,mastheadInk,`${viewport.width}x${viewport.height} masthead ink at ${progress}`);
+        assert.equal(state.wordmark.color,mastheadInk,`${viewport.width}x${viewport.height} wordmark ink at ${progress}`);
+        assert.equal(state.navLink.color,mastheadInk,`${viewport.width}x${viewport.height} navigation ink at ${progress}`);
+        assert.equal(state.menuToggle.color,mastheadInk,`${viewport.width}x${viewport.height} More toggle ink at ${progress}`);
+        assert.equal(state.caption.display,expectedCaptionDisplay,
+          `${viewport.width}x${viewport.height} identity caption keeps its existing visibility breakpoint`);
+        if (captionVisible) {
+          assert.equal(state.caption.color,captionInk,`${viewport.width}x${viewport.height} caption ink at ${progress}`);
+          assert.equal(state.caption.opacity,inBand || inContact ? 1 : .65,
+            `${viewport.width}x${viewport.height} caption opacity at ${progress}`);
+        }
+        assert.equal(state.footer.color,footerInk,`${viewport.width}x${viewport.height} fixed footer ink at ${progress}`);
+        assert.equal(state.footerPlace.color,footerInk,`${viewport.width}x${viewport.height} left place ink at ${progress}`);
+        assert.equal(state.sceneLabel.color,sceneLabelInk,`${viewport.width}x${viewport.height} scene label ink at ${progress}`);
+        assert.equal(state.scrollCue.color,scrollCueInk,`${viewport.width}x${viewport.height} scroll cue ink at ${progress}`);
+        if (coordinateVisible) assert.notEqual(state.coordinate.display,'none',
+          `${viewport.width}x${viewport.height} coordinate remains visible above its breakpoint at ${progress}`);
+        else assert.equal(state.coordinate.display,'none',
+          `${viewport.width}x${viewport.height} coordinate remains hidden at its breakpoint at ${progress}`);
+        assert.equal(state.coordinate.color,coordinateInk,`${viewport.width}x${viewport.height} coordinate ink at ${progress}`);
+        assert.equal(state.coordinate.opacity,inBand || inContact ? 1 : .5,
+          `${viewport.width}x${viewport.height} coordinate opacity at ${progress}`);
+        snapshots.set(progress,state);
+      };
+
+      const assertMenuFocusAt = async (progress, first = false) => {
+        if (first) {
+          await page.locator('#menu-toggle').click();
+          await page.keyboard.press('Tab');
+        } else {
+          await page.keyboard.press('Tab');
+          await page.keyboard.press('Tab');
+        }
+
+        const action = await readCityChromeState(page);
+        const actionFocus = await readFocusedControlState(page);
+        assert.equal(action.menu.display,'grid',`${viewport.width}px More menu remains open at ${progress}`);
+        assert.equal(action.menu.backgroundColor,menuSurface,`${viewport.width}px More menu keeps its opaque background at ${progress}`);
+        assert.equal(action.menu.color,paper,`${viewport.width}px More menu keeps light text at ${progress}`);
+        assert.equal(action.menuAction.color,paper,`${viewport.width}px More action keeps light text at ${progress}`);
+        assert.deepEqual(actionFocus,{id:'reading-toggle',href:null,focusVisible:true,outlineColor:lightFocus,outlineStyle:'solid'},
+          `${viewport.width}px menu action retains its visible light focus outline at ${progress}`);
+
+        await page.keyboard.press('Shift+Tab');
+        const toggleFocus = await readFocusedControlState(page);
+        const expectedExposedFocus = progress >= .928 && progress < .94 ? darkCity
+          : progress >= .94 ? contactFocus : lightFocus;
+        assert.deepEqual(toggleFocus,{id:'menu-toggle',href:null,focusVisible:true,outlineColor:expectedExposedFocus,outlineStyle:'solid'},
+          `${viewport.width}px exposed menu toggle focus follows the scene at ${progress}`);
+
+        await page.keyboard.press('Shift+Tab');
+        const navFocus = await readFocusedControlState(page);
+        assert.deepEqual(navFocus,{id:'',href:'#contact',focusVisible:true,outlineColor:expectedExposedFocus,outlineStyle:'solid'},
+          `${viewport.width}px exposed masthead link focus follows the scene at ${progress}`);
+      };
+
+      for (const [index,progress] of [.926,.928,.938,.94].entries()) {
+        await assertChromeAt(progress);
+        await assertMenuFocusAt(progress,index === 0);
+      }
+
+      for (const progress of [.938,.928,.926]) {
+        await assertChromeAt(progress);
+        await assertMenuFocusAt(progress);
+        assert.equal(snapshots.get(progress).masthead.color,(await readCityChromeState(page)).masthead.color,
+          `${viewport.width}x${viewport.height} reverse scrub restores masthead state at ${progress}`);
+      }
+
+      if (viewport.width === 1440 || viewport.width === 390) {
+        for (const [progress,rounding,expectedBand,expectedContact] of [
+          [.928,'floor',false,false],
+          [.928,'ceil',true,false],
+          [.94,'floor',true,false],
+          [.938,'ceil',true,false],
+          [.94,'ceil',false,true],
+          [.938,'ceil',true,false],
+          [.928,'ceil',true,false],
+          [.928,'floor',false,false],
+        ]) {
+          const root = await setRootScrollProgress(page,progress,rounding);
+          const state = await readCityChromeState(page);
+          assert.equal(root.returnInk,expectedBand,`${viewport.width}x${viewport.height} real root scroll ${rounding} at ${progress}: ${JSON.stringify(root)}`);
+          assert.equal(root.contact,expectedContact,`${viewport.width}x${viewport.height} real Contact boundary ${rounding} at ${progress}: ${JSON.stringify(root)}`);
+          assert.equal(state.masthead.color,expectedBand ? darkCity : expectedContact ? contactCity : paper,
+            `${viewport.width}x${viewport.height} computed masthead ink follows real root progress ${rounding} at ${progress}`);
+          assert.equal(state.coordinate.color,expectedBand || expectedContact ? darkCity : 'rgb(196, 214, 215)',
+            `${viewport.width}x${viewport.height} coordinate ink follows real root progress ${rounding} at ${progress}`);
+          assert.equal(state.coordinate.opacity,expectedBand || expectedContact ? 1 : .5,
+            `${viewport.width}x${viewport.height} coordinate opacity follows real root progress ${rounding} at ${progress}`);
+        }
+      }
+
+      await page.keyboard.press('Escape');
+      if (viewport.width === 1440) {
+        await setStageProgress(page,.928);
+        const cue = page.locator('#scroll-cue');
+        await cue.focus();
+        await page.keyboard.press('Shift+Tab');
+        await page.keyboard.press('Tab');
+        assert.deepEqual(await readFocusedControlState(page),{
+          id:'scroll-cue',href:'#contact',focusVisible:true,outlineColor:darkCity,outlineStyle:'solid',
+        },'keyboard focus on the scroll cue uses return-band dark focus ink');
+      }
+      await page.close();
+      assert.deepEqual(errors,[]);
+      console.log(`PASS Task 9 final contrast surfaces ${viewport.width}x${viewport.height}`);
+    }
+
+    for (const {width,expectedDisplay} of [
+      {width:761,expectedDisplay:'block'},
+      {width:760,expectedDisplay:'none'},
+    ]) {
+      const viewport = {width,height:844};
+      const {page,errors} = await openScenario({count:5,orbitCount:0,viewport});
+      await setStageProgress(page,.928);
+      const caption = (await readCityChromeState(page)).caption;
+      assert.equal(caption.display,expectedDisplay,
+        `${width}x844 identity caption follows the exact 760px visibility breakpoint`);
+      await page.close();
+      assert.deepEqual(errors,[]);
+      console.log(`PASS identity caption visibility edge ${width}x844`);
+    }
+
+    const {page,errors} = await openScenario({count:5,orbitCount:0,viewport:{width:1440,height:900}});
+    const beforeToggle = await setRootScrollProgress(page,.938,'ceil');
+    assert.ok(beforeToggle.expectedProgress >= .938 && beforeToggle.expectedProgress < .94,
+      `runtime reduced-motion toggle starts in the return band: ${JSON.stringify(beforeToggle)}`);
+    assert.equal((await readCityChromeState(page)).masthead.color,darkCity,
+      'runtime reduced-motion toggle starts with city masthead ink');
+    await page.emulateMedia({reducedMotion:'reduce'});
+    await page.waitForFunction(() => !document.body.classList.contains('is-return-city-ink'));
+    assert.equal(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches),true,
+      'runtime reduced-motion preference changes while the page is open');
+    const duringReducedMotion = await readCityChromeState(page);
+    assert.equal(duringReducedMotion.returnInk,false,'runtime reduced motion clears the temporary city class immediately');
+    assert.equal(duringReducedMotion.masthead.color,paper,'runtime reduced motion restores the reading masthead ink');
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    await page.waitForFunction(() => document.body.classList.contains('is-return-city-ink'));
+    const afterToggle = await setRootScrollProgress(page,.938,'ceil');
+    assert.ok(afterToggle.expectedProgress >= .938 && afterToggle.expectedProgress < .94,
+      `runtime reduced-motion toggle returns to the same root progress band: ${JSON.stringify(afterToggle)}`);
+    const resumedMotion = await readCityChromeState(page);
+    assert.equal(resumedMotion.returnInk,true,'runtime motion resume restores the progress-derived city state');
+    assert.equal(resumedMotion.masthead.color,darkCity,'runtime motion resume restores dark masthead ink');
+    assert.deepEqual(errors,[]);
+    await page.close();
+    console.log('PASS Task 9 final contrast runtime reduced-motion toggle');
   }
 } finally {
   await browser.close();
