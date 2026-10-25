@@ -584,16 +584,25 @@ try {
     await page.close();
   }
 
-  for (const viewport of [{width:1440,height:900},{width:1024,height:768},{width:390,height:844},{width:844,height:390}]) {
+  for (const viewport of [
+    {width:1440,height:900},
+    {width:1024,height:768},
+    {width:390,height:844},
+    {width:667,height:375},
+    {width:760,height:390},
+    {width:761,height:390},
+    {width:844,height:390},
+  ]) {
     const {page, errors} = await openScenario({count:5, orbitCount:0, viewport});
     const layout = await page.evaluate(() => ({
       columns:getComputedStyle(document.querySelector('#project-catalog-grid')).gridTemplateColumns.split(' ').length,
+      cardMediaHeight:parseFloat(getComputedStyle(document.querySelector('.project-card-media')).height),
       scrollWidth:document.documentElement.scrollWidth,
       innerWidth,
     }));
     const sun = await projectedSunBounds(page, .535);
     const catalogBox = await page.locator('.project-index').boundingBox();
-    const stacked = viewport.width <= 760 && viewport.height > 500;
+    const stacked = viewport.width <= 760;
     const subjectWidth = stacked ? viewport.width*.55 : viewport.width*.50-Math.min(24,viewport.width*.04)*2;
     const priorSubjectWidth = stacked ? viewport.width*.50 : subjectWidth;
     const maxDiameter = Math.min(viewport.height*.33, subjectWidth);
@@ -604,6 +613,9 @@ try {
       return {x:rect.x,right:rect.right,expectedGutter};
     });
     assert.equal(layout.columns, viewport.width>1200 ? 2 : 1, `${viewport.width}px catalog uses the expected responsive column count`);
+    if (viewport.height <= 500) {
+      assert.ok(Math.abs(layout.cardMediaHeight-94)<1, `${viewport.width}px short-landscape cards keep 94px media: ${JSON.stringify(layout)}`);
+    }
     assert.ok(layout.scrollWidth <= layout.innerWidth, `${viewport.width}px layout has no horizontal overflow`);
     assert.ok(Math.abs(sun.width - sun.height) < 2, `${viewport.width}px Sun remains circular: ${JSON.stringify(sun)}`);
     assert.ok(Math.abs(sun.width-maxDiameter)<2, `${viewport.width}px Sun reaches its clamped .33h/.55w surface target: ${JSON.stringify({sun,maxDiameter})}`);
@@ -613,13 +625,13 @@ try {
     } else {
       assert.ok(Math.abs(sunGrowth-1)<.02, `${viewport.width}px width cap preserves the prior Sun size: ${JSON.stringify({sun,sunGrowth})}`);
     }
-    if (viewport.width === 390) {
+    if (stacked) {
       assert.ok(Math.abs(sun.center.x - viewport.width * .5) < 2 && Math.abs(sun.center.y - viewport.height * .24) < 2,
-        `portrait Sun centers above the catalog: ${JSON.stringify(sun)}`);
+        `stacked Sun centers above the catalog at ${viewport.width}x${viewport.height}: ${JSON.stringify(sun)}`);
       assert.ok(catalogBox && catalogBox.y-sun.bottom >= Math.max(24,viewport.width*.03),
-        `portrait Sun clears the catalog heading: ${JSON.stringify({sun,catalogBox})}`);
+        `stacked Sun surface clears the catalog heading at ${viewport.width}x${viewport.height}: ${JSON.stringify({sun,catalogBox})}`);
       assert.ok(Math.abs(catalogLayout.x-catalogLayout.expectedGutter)<1 && Math.abs(viewport.width-catalogLayout.right-catalogLayout.expectedGutter)<1,
-        `portrait catalog remains stacked within its safe gutters: ${JSON.stringify(catalogLayout)}`);
+        `stacked catalog remains within safe gutters at ${viewport.width}x${viewport.height}: ${JSON.stringify(catalogLayout)}`);
     } else {
       assert.ok(Math.abs(sun.center.x - viewport.width * .25) < 2 && Math.abs(sun.center.y - viewport.height * .5) < 2,
         `split-layout Sun sits in the left subject slot: ${JSON.stringify(sun)}`);
@@ -639,6 +651,53 @@ try {
     assert.ok(arrivalBounds.width < zoomMiddleBounds.width && zoomMiddleBounds.width < zoomEndBounds.width,
       `${viewport.width}px Earth visibly grows through zoom: ${JSON.stringify({arrivalBounds,zoomMiddleBounds,zoomEndBounds})}`);
     await setStageProgress(page, .535);
+    if (viewport.width === 667) {
+      const asyncFocusAndCheck = async (locator, label) => {
+        await locator.focus();
+        await page.keyboard.press('Shift+Tab');
+        await page.keyboard.press('Tab');
+        const focus = await locator.evaluate(node => {
+          const rect=node.getBoundingClientRect();
+          const style=getComputedStyle(node);
+          return {
+            active:document.activeElement===node,
+            focusVisible:node.matches(':focus-visible'),
+            visibility:style.visibility,
+            opacity:Number(style.opacity),
+            outlineStyle:style.outlineStyle,
+            outlineWidth:parseFloat(style.outlineWidth),
+            left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom,
+          };
+        });
+        const catalogVisibility=await readCatalogVisibility(page);
+        const state=await readStageState(page);
+        assert.equal(focus.active,true,`${label} receives keyboard focus`);
+        assert.equal(focus.focusVisible,true,`${label} exposes its keyboard focus state`);
+        assert.equal(focus.visibility,'visible',`${label} remains visible`);
+        assert.ok(focus.opacity>.99,`${label} is not faded: ${JSON.stringify(focus)}`);
+        assert.ok(focus.outlineStyle!=='none' && focus.outlineWidth>0,`${label} keeps a visible focus outline: ${JSON.stringify(focus)}`);
+        assert.ok(focus.left<viewport.width && focus.right>0 && focus.top<viewport.height && focus.bottom>0,
+          `${label} intersects the viewport: ${JSON.stringify(focus)}`);
+        assert.deepEqual(catalogVisibility,{opacity:1,inert:false,ariaHidden:'false'},`${label} stays in a visible, interactive catalog`);
+        assert.ok(state.progress<state.returnPhases.returnStart,
+          `${label} is reachable before return ${state.returnPhases.returnStart}: ${state.progress}`);
+      };
+
+      const firstPageActions=page.locator('#project-catalog-grid .project-card-action');
+      for (let index=0;index<await firstPageActions.count();index++) {
+        await asyncFocusAndCheck(firstPageActions.nth(index),`667x375 first-page card action ${index+1}`);
+      }
+      const next=page.locator('#project-catalog-next');
+      assert.equal(await next.isEnabled(),true,'the first catalog page has an enabled Next control');
+      await asyncFocusAndCheck(next,'667x375 first-page Next control');
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.querySelectorAll('#project-catalog-grid .project-card-action').length === 1);
+      const secondPageAction=page.locator('#project-catalog-grid .project-card-action');
+      await asyncFocusAndCheck(secondPageAction,'667x375 second-page card action');
+      const previous=page.locator('#project-catalog-previous');
+      assert.equal(await previous.isEnabled(),true,'the later catalog page has an enabled Previous control');
+      await asyncFocusAndCheck(previous,'667x375 later-page Previous control');
+    }
     if (viewport.width === 844) {
       for (const action of await page.locator('#project-catalog-grid .project-card-action').all()) {
         await action.focus();

@@ -505,7 +505,7 @@ export class JourneyScene {
     const returnTravel = smooth(this.projectLayout.catalogFadeEnd, this.projectLayout.earthArrival, p);
     const solar = smooth(.48, solarIntroEnd, p) * (1 - returnTravel);
     const hasOrbit = this.projectLayout.ids.length > 0;
-    const stacked = this.mobile && this.height > 500;
+    const stacked = this.mobile;
     const radiusPixels = stacked ? Math.min(this.width * .31, this.height * .145) : Math.min(this.width * .205, this.height * .25);
     const halfHeight = 62.4 * this.height / (2 * radiusPixels);
     const overviewDistance = halfHeight / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
@@ -586,7 +586,7 @@ export class JourneyScene {
     this.updateCamera(p, solarIntroEnd);
     const orbitMorph = smooth(.48, solarIntroEnd, p) * (1 - smooth(this.projectLayout.catalogFadeEnd, this.projectLayout.earthArrival, p));
     const orbitScale = lerp(1, .65, orbitMorph);
-    const stacked = this.mobile && this.height > 500;
+    const stacked = this.mobile;
     const aspectScale = stacked ? 1 : .8 * this.width / this.height;
     this.solar.scale.set(orbitScale * aspectScale, orbitScale, orbitScale);
     this.solar.rotation.x = orbitMorph * Math.PI / 2;
