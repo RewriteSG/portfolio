@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { buildScrollMetrics, scrollAtProgress } from '../../assets/journey-v2/project-layout.js';
 
 const {chromium} = await import(process.env.JOURNEY_PLAYWRIGHT_MODULE || 'playwright');
 const base = process.env.JOURNEY_BASE_URL || 'http://127.0.0.1:4173/';
@@ -64,6 +65,45 @@ function readStageState(page) {
       },
     };
   });
+}
+
+async function readCameraScrollSpans(page) {
+  const input = await page.evaluate(() => {
+    const scene = window.__journeyScene;
+    const height = innerHeight;
+    const panels = [...document.querySelectorAll('.scene-panel')].map(panel => {
+      const start = Number(panel.dataset.start);
+      const end = Number(panel.dataset.end);
+      const configured = Number(panel.dataset.fade) || (panel.id === 'about' ? .025 : panel.id === 'contact' ? .027 : .012);
+      return {
+        start,
+        end,
+        fade:Number.isFinite(start) && Number.isFinite(end) && end > start
+          ? Math.min(configured, (end - start) / 4)
+          : configured,
+        overflow:Math.max(0, panel.scrollHeight - panel.clientHeight),
+        minimumDuration:panel.dataset.projectId ? Math.max(640, height * .9) : 0,
+      };
+    });
+    return {
+      height,
+      layout:{
+        catalogCameraStart:scene.projectLayout.catalogCameraStart,
+        projectsStageStart:scene.projectLayout.projectsStageStart,
+        returnStart:scene.projectLayout.returnStart,
+        returnEnd:scene.projectLayout.returnEnd,
+      },
+      panels,
+    };
+  });
+  const metrics = buildScrollMetrics(input.layout, input.height, input.panels);
+  return {
+    height:input.height,
+    catalog:scrollAtProgress(metrics, input.layout.projectsStageStart)
+      - scrollAtProgress(metrics, input.layout.catalogCameraStart),
+    return:scrollAtProgress(metrics, input.layout.returnEnd)
+      - scrollAtProgress(metrics, input.layout.returnStart),
+  };
 }
 
 function readCatalogVisibility(page) {
@@ -236,8 +276,13 @@ try {
     assert.equal(await page.locator('#project-catalog-page-status').innerText(), 'No projects to show yet.');
     assert.deepEqual(await page.evaluate(() => ({orbit:window.__journeyProjects.presentation.orbitCount, chapters:window.__journeyProjects.presentation.chapters.length, details:window.__journeyProjects.presentation.details.length})), {orbit:0, chapters:0, details:0});
     const zeroOrbitStage = await readStageState(page);
+    const zeroOrbitSpans = await readCameraScrollSpans(page);
     assert.equal(zeroOrbitStage.catalogCameraStart, .48, 'zero-orbit camera handoff starts at .48');
     assert.ok(Math.abs(zeroOrbitStage.progress - .535) < .0001, `zero-orbit catalog starts at .535, received ${zeroOrbitStage.progress}`);
+    assert.ok(zeroOrbitSpans.catalog >= 1.5 * zeroOrbitSpans.height - 1e-7,
+      `zero-orbit catalog handoff retains its 1.5× floor: ${JSON.stringify(zeroOrbitSpans)}`);
+    assert.ok(zeroOrbitSpans.return >= 2.25 * zeroOrbitSpans.height - 1e-7,
+      `zero-orbit return has the 2.25× floor: ${JSON.stringify(zeroOrbitSpans)}`);
     assert.ok(await page.evaluate(() => Boolean(document.querySelector('#project-mount').compareDocumentPosition(document.querySelector('#projects')) & Node.DOCUMENT_POSITION_FOLLOWING)), 'the orbit mount precedes the catalog stage in DOM order');
     assert.deepEqual(errors, []);
     console.log('PASS empty catalog starts at .535 after solar intro and hides pagination');
@@ -345,8 +390,13 @@ try {
     const {page, errors} = await openScenario({count:13, orbitCount:1});
     assert.deepEqual(await page.evaluate(() => ({orbit:window.__journeyProjects.presentation.orbitCount, chapters:window.__journeyProjects.presentation.chapters.length, controls:window.__journeyProjects.presentation.controls.length, details:window.__journeyProjects.presentation.details.length})), {orbit:1, chapters:1, controls:1, details:13});
     const directStage = await readStageState(page);
+    const orbitSpans = await readCameraScrollSpans(page);
     assert.equal(directStage.catalogCameraStart, .818, 'orbit camera handoff starts at .818');
     assert.ok(Math.abs(directStage.progress - .83) < .0001, `direct #projects hash starts after the featured orbit at .83, received ${directStage.progress}`);
+    assert.ok(orbitSpans.catalog >= 1.5 * orbitSpans.height - 1e-7,
+      `orbit catalog handoff retains its 1.5× floor: ${JSON.stringify(orbitSpans)}`);
+    assert.ok(orbitSpans.return >= 2.25 * orbitSpans.height - 1e-7,
+      `orbit return has the 2.25× floor: ${JSON.stringify(orbitSpans)}`);
     assert.equal(directStage.sunMaterialType, 'MeshBasicMaterial', 'direct catalog entry uses a flat Sun surface');
     assert.equal(directStage.sunMaterialColor, 0xffd8a0);
     const directSunBounds = await projectedSunBounds(page, .83);

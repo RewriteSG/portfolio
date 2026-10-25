@@ -106,20 +106,21 @@ export function buildScrollMetrics(layout, viewportHeight, panelMetrics = []) {
   });
 
   let metrics = buildSegments(baseline, demands);
-  const floor = 1.5 * height;
+  const catalogCameraFloor = 1.5 * height;
+  const returnCameraFloor = 2.25 * height;
   const intervals = [
-    [layout?.catalogCameraStart, layout?.projectsStageStart],
-    [layout?.returnStart, layout?.returnEnd],
+    {start:layout?.catalogCameraStart, end:layout?.projectsStageStart, floor:catalogCameraFloor},
+    {start:layout?.returnStart, end:layout?.returnEnd, floor:returnCameraFloor},
   ];
-  for (const [rawStart, rawEnd] of intervals) {
-    const start = Number(rawStart);
-    const end = Number(rawEnd);
+  for (const interval of intervals) {
+    const start = Number(interval.start);
+    const end = Number(interval.end);
     if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
     const from = clamp(start);
     const to = clamp(end);
     if (to <= from) continue;
     const existingDistance = scrollAtProgress(metrics, to) - scrollAtProgress(metrics, from);
-    const deficit = Math.max(0, floor - existingDistance);
+    const deficit = Math.max(0, interval.floor - existingDistance);
     if (deficit > 0) {
       demands.push({start:from, end:to, extra:deficit});
       metrics = buildSegments(baseline, demands);

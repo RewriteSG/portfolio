@@ -60,19 +60,20 @@ for (const count of [0, 1, 3, 8, 64]) {
 
 for (const count of [0, 1, 3]) {
   for (const height of [390, 768, 900]) {
-    test(`${count} projects at ${height}px keep both camera intervals at least 1.5 viewport heights`, () => {
+    test(`${count} projects at ${height}px keep the catalog at 1.5× and return at 2.25× viewport height`, () => {
       const layout = buildProjectLayout(Array.from({length:count}, (_, i) => `handoff-${i}`));
       const panels = layout.intervals.map(interval => ({...interval, overflow:1400, minimumDuration:810}));
       const metrics = buildScrollMetrics(layout, height, panels);
-      const floor = 1.5 * height;
+      const catalogFloor = 1.5 * height;
+      const returnFloor = 2.25 * height;
       const span = (start, end) => scrollAtProgress(metrics, end) - scrollAtProgress(metrics, start);
 
       assert.equal(layout.catalogCameraStart, count ? .818 : .48);
       assert.equal(layout.projectsStageStart, count ? .83 : .535);
-      assert.ok(span(layout.catalogCameraStart, layout.projectsStageStart) >= floor - 1e-7,
-        `catalog camera span ${span(layout.catalogCameraStart, layout.projectsStageStart)} is below ${floor}`);
-      assert.ok(span(.90, .94) >= floor - 1e-7,
-        `return camera span ${span(.90, .94)} is below ${floor}`);
+      assert.ok(span(layout.catalogCameraStart, layout.projectsStageStart) >= catalogFloor - 1e-7,
+        `catalog camera span ${span(layout.catalogCameraStart, layout.projectsStageStart)} is below ${catalogFloor}`);
+      assert.ok(span(layout.returnStart, layout.returnEnd) >= returnFloor - 1e-7,
+        `return camera span ${span(layout.returnStart, layout.returnEnd)} is below ${returnFloor}`);
       for (const progress of [layout.catalogCameraStart, layout.projectsStageStart, .90, .91, .922, .93, .94]) {
         assert.ok(Math.abs(progressAtScroll(metrics, scrollAtProgress(metrics, progress)) - progress) < 1e-12,
           `progress round-trips at ${progress}`);
@@ -104,8 +105,37 @@ test('catalog camera top-up composes with overlapping final orbit content by max
     assert.equal(contentOnlyDistance < floor, overflow === 0, 'fixture exercises both sides of the 1.5× floor');
     assert.ok(Math.abs(finalDistance - Math.max(contentOnlyDistance, floor)) < 1e-7,
       `final span ${finalDistance} should equal max(${contentOnlyDistance}, ${floor})`);
+    if (contentOnlyDistance < floor) {
+      assert.ok(Math.abs(finalDistance - floor) < 1e-7,
+        `below-floor catalog span ${finalDistance} should be exactly ${floor}`);
+    }
     for (const progress of [cameraStart, stageStart]) {
       assert.ok(Math.abs(progressAtScroll(metrics, scrollAtProgress(metrics, progress)) - progress) < 1e-12);
+    }
+  }
+});
+
+test('return camera top-up composes below- and above-floor content by max, not addition', () => {
+  const height = 900;
+  const floor = 2.25 * height;
+  const layout = buildProjectLayout(['first', 'second', 'last']);
+  const start = layout.returnStart;
+  const end = layout.returnEnd;
+  const baseline = Math.max(6500, 16 * height) - height;
+  const baseDistance = baseline * (end - start);
+
+  for (const overflow of [floor / 2, floor * 2]) {
+    const contentOnlyDistance = Math.max(baseDistance, overflow);
+    const metrics = buildScrollMetrics(layout, height, [{start, end, overflow, minimumDuration:0}]);
+    const finalDistance = scrollAtProgress(metrics, end) - scrollAtProgress(metrics, start);
+
+    assert.equal(contentOnlyDistance < floor, overflow === floor / 2,
+      'fixture exercises both sides of the 2.25× floor');
+    assert.ok(Math.abs(finalDistance - Math.max(contentOnlyDistance, floor)) < 1e-7,
+      `final span ${finalDistance} should equal max(${contentOnlyDistance}, ${floor})`);
+    for (const progress of [start, .91, .922, .93, end]) {
+      assert.ok(Math.abs(progressAtScroll(metrics, scrollAtProgress(metrics, progress)) - progress) < 1e-12,
+        `progress round-trips at ${progress}`);
     }
   }
 });
