@@ -191,3 +191,12 @@
 body.preflight-pending{overflow:hidden}
 body.preflight-pending .journey-shell{visibility:hidden;pointer-events:none}
 body.preflight-pending #journey-startup-gate{visibility:visible}
+
+.has-journey.is-return-city-ink .return-message{color:#234139}
+.has-journey.is-return-city-ink .return-message>span{color:#3d5b50}
+.has-journey.is-return-city-ink .journey-footer,
+.has-journey.is-return-city-ink .footer-place,
+.has-journey.is-return-city-ink .scene-label,
+.has-journey.is-return-city-ink .scroll-cue{color:#426253}
+.has-journey.is-return-city-ink .page-progress{background:#42625322}
+.has-journey.is-return-city-ink .page-progress>span{background:#456f60}

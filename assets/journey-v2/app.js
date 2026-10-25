@@ -380,7 +380,7 @@ function goTo(id, {focus = false, updateHash = true, instant = false} = {}) {
 
 function makeReadable({error = false} = {}) {
   const id = lastActive in anchors ? lastActive : 'hello';
-  body.classList.remove('has-journey', 'is-projects', 'is-contact');
+  body.classList.remove('has-journey', 'is-projects', 'is-contact', 'is-return-city-ink');
   body.classList.toggle('is-fallback', error);
   body.classList.toggle('is-reading', !error);
   panels.forEach(panel => {
@@ -463,6 +463,11 @@ function updateOrbit(p) {
 function updatePresentation(progress) {
   const p = clamp(progress);
   const reducedMotion = prefersReducedMotion();
+  // Scroll-to-progress inversion can land a fraction below an exact phase boundary.
+  const contrastProgress = Number(p.toFixed(12));
+  body.classList.toggle('is-return-city-ink', !reducedMotion
+    && contrastProgress >= projectLayout.cloudRevealEnd
+    && contrastProgress < projectLayout.returnEnd);
   const inProjects = p >= .48 && p < projectLayout.projectsStageEnd;
   body.classList.toggle('is-projects', inProjects);
   const projectPanel = panels.find(panel => panel.id === 'projects');
@@ -513,7 +518,7 @@ function updatePresentation(progress) {
   }
 
   progressFill.style.transform = `scaleX(${p.toFixed(5)})`;
-  body.classList.toggle('is-contact', p >= projectLayout.returnEnd);
+  body.classList.toggle('is-contact', contrastProgress >= projectLayout.returnEnd);
   const shade = p < .15 ? .08 : p < .48 ? .65 : p < .90 ? .08 : p < .94 ? .25 : 0;
   body.style.setProperty('--shade', shade);
 

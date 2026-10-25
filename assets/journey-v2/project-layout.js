@@ -4,6 +4,8 @@ const END = .83;
 const RETURN_START = .90;
 const CATALOG_FADE_END = .91;
 const EARTH_ARRIVAL = .922;
+const CLOUD_REVEAL_START = .924;
+const CLOUD_REVEAL_END = .928;
 const EARTH_ZOOM_START = .926;
 const EARTH_ZOOM_END = .93;
 const RETURN_END = .94;
@@ -38,6 +40,8 @@ export function buildProjectLayout(projectIds = []) {
     returnStart:RETURN_START,
     catalogFadeEnd:CATALOG_FADE_END,
     earthArrival:EARTH_ARRIVAL,
+    cloudRevealStart:CLOUD_REVEAL_START,
+    cloudRevealEnd:CLOUD_REVEAL_END,
     earthZoomStart:EARTH_ZOOM_START,
     earthZoomEnd:EARTH_ZOOM_END,
     returnEnd:RETURN_END,

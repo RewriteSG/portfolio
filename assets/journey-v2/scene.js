@@ -619,8 +619,9 @@ export class JourneyScene {
     });
     this.city.group.visible = p > this.projectLayout.returnEnd - .002;
     if (this.city.group.visible) this.city.update(this.time, this.reducedMotion);
-    const cloudReveal = smooth(this.projectLayout.earthZoomStart, this.projectLayout.earthZoomEnd, p);
-    this.scene.background.set(0x050711).lerp(new THREE.Color(0xbccfcf), cloudReveal);
+    const backgroundBlend = smooth(this.projectLayout.earthArrival, this.projectLayout.earthZoomStart, p);
+    const cloudReveal = smooth(this.projectLayout.cloudRevealStart, this.projectLayout.cloudRevealEnd, p);
+    this.scene.background.set(0x050711).lerp(new THREE.Color(0xbccfcf), backgroundBlend);
     const starFade = smooth(this.projectLayout.returnStart, this.projectLayout.returnEnd, p);
     this.distantStars.visible = starFade < .999;
     this.distantStars.material.opacity = .66 * (1 - starFade);

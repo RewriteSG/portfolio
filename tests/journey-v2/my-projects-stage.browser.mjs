@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { buildScrollMetrics, scrollAtProgress } from '../../assets/journey-v2/project-layout.js';
+import { buildScrollMetrics, progressAtScroll, scrollAtProgress } from '../../assets/journey-v2/project-layout.js';
 
 const {chromium} = await import(process.env.JOURNEY_PLAYWRIGHT_MODULE || 'playwright');
 const base = process.env.JOURNEY_BASE_URL || 'http://127.0.0.1:4173/';
@@ -68,10 +68,30 @@ function readStageState(page) {
         returnStart:scene.projectLayout.returnStart,
         catalogFadeEnd:scene.projectLayout.catalogFadeEnd,
         earthArrival:scene.projectLayout.earthArrival,
+        cloudRevealStart:scene.projectLayout.cloudRevealStart,
+        cloudRevealEnd:scene.projectLayout.cloudRevealEnd,
         earthZoomStart:scene.projectLayout.earthZoomStart,
         earthZoomEnd:scene.projectLayout.earthZoomEnd,
         returnEnd:scene.projectLayout.returnEnd,
       },
+    };
+  });
+}
+
+function readReturnInkState(page) {
+  return page.evaluate(() => {
+    const color = selector => getComputedStyle(document.querySelector(selector)).color;
+    return {
+      active:document.body.classList.contains('is-return-city-ink'),
+      contact:document.body.classList.contains('is-contact'),
+      title:color('.return-message > p'),
+      subtitle:color('.return-message > span'),
+      footer:color('.journey-footer'),
+      footerPlace:color('.footer-place'),
+      sceneLabel:color('.scene-label'),
+      scrollCue:color('.scroll-cue'),
+      progressTrack:getComputedStyle(document.querySelector('.page-progress')).backgroundColor,
+      progressFill:getComputedStyle(document.querySelector('.page-progress > span')).backgroundColor,
     };
   });
 }
@@ -157,6 +177,77 @@ async function setStageProgress(page, progress) {
     scene.frame(performance.now());
   }, progress);
   return readStageState(page);
+}
+
+async function waitForStableSceneAndRoot(page) {
+  await page.evaluate(() => new Promise((resolve, reject) => {
+    let previous = '';
+    let stableFrames = 0;
+    const startedAt = performance.now();
+    const sample = () => {
+      const state = window.__journeyScene.getDebugState();
+      const current = [scrollY, state.targetProgress.toFixed(8), state.progress.toFixed(8), document.documentElement.scrollHeight].join(':');
+      stableFrames = current === previous ? stableFrames + 1 : 0;
+      previous = current;
+      if (stableFrames >= 3) resolve();
+      else if (performance.now() - startedAt > 5000) reject(new Error('scene/root state did not stabilize after resize'));
+      else requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  }));
+}
+
+async function setRootScrollProgress(page, progress, rounding = 'ceil') {
+  const input = await page.evaluate(() => {
+    const scene = window.__journeyScene;
+    const height = innerHeight;
+    const panels = [...document.querySelectorAll('.scene-panel')].map(panel => {
+      const start = Number(panel.dataset.start);
+      const end = Number(panel.dataset.end);
+      const configured = Number(panel.dataset.fade) || (panel.id === 'about' ? .025 : panel.id === 'contact' ? .027 : .012);
+      return {
+        start,
+        end,
+        fade:Number.isFinite(start) && Number.isFinite(end) && end > start
+          ? Math.min(configured, (end - start) / 4)
+          : configured,
+        overflow:Math.max(0, panel.scrollHeight - panel.clientHeight),
+        minimumDuration:panel.dataset.projectId ? Math.max(640, height * .9) : 0,
+      };
+    });
+    return {
+      height,
+      layout:{
+        catalogCameraStart:scene.projectLayout.catalogCameraStart,
+        projectsStageStart:scene.projectLayout.projectsStageStart,
+        returnStart:scene.projectLayout.returnStart,
+        returnEnd:scene.projectLayout.returnEnd,
+      },
+      panels,
+    };
+  });
+  const metrics = buildScrollMetrics(input.layout, input.height, input.panels);
+  const exactScrollTop = scrollAtProgress(metrics, progress);
+  const scrollTop = Math[rounding](exactScrollTop);
+  const expectedProgress = progressAtScroll(metrics, scrollTop);
+  await page.evaluate(top => scrollTo({top, behavior:'instant'}), scrollTop);
+  await page.waitForFunction(expectedTop => Math.round(scrollY) === expectedTop, scrollTop);
+  await page.waitForFunction(expected => {
+    const state = window.__journeyScene.getDebugState();
+    return Math.abs(state.targetProgress - expected) < .0000001
+      && Math.abs(state.progress - state.targetProgress) < .00000001;
+  }, expectedProgress);
+  return page.evaluate(expected => {
+    const state = window.__journeyScene.getDebugState();
+    return {
+      scrollY,
+      expectedProgress:expected,
+      targetProgress:state.targetProgress,
+      renderedProgress:state.progress,
+      returnInk:document.body.classList.contains('is-return-city-ink'),
+      contact:document.body.classList.contains('is-contact'),
+    };
+  }, expectedProgress);
 }
 
 function projectedSolarBounds(page, progress = .86) {
@@ -340,7 +431,9 @@ try {
     const stageMiddle = await setStageProgress(page, .72);
     assert.ok(Math.abs(stageEntry.progress - .535) < .0001, 'zero-orbit catalog follows the solar intro');
     assert.deepEqual(stageEntry.returnPhases, {
-      returnStart:.90, catalogFadeEnd:.91, earthArrival:.922, earthZoomStart:.926, earthZoomEnd:.93, returnEnd:.94,
+      returnStart:.90, catalogFadeEnd:.91, earthArrival:.922,
+      cloudRevealStart:.924, cloudRevealEnd:.928,
+      earthZoomStart:.926, earthZoomEnd:.93, returnEnd:.94,
     });
     assert.deepEqual({
       type:stageEntry.sunMaterialType,
@@ -429,23 +522,27 @@ try {
     const cloudCheckpoints = [.90, .922, .924, .925, .926, .928, .93, .938, .94, .958, .976];
     const forwardCloudStates = new Map();
     for (const progress of cloudCheckpoints) forwardCloudStates.set(progress, await setStageProgress(page, progress));
-    for (const progress of [.90, .922, .924, .925, .926]) {
+    for (const progress of [.90, .922, .924]) {
       assert.equal(forwardCloudStates.get(progress).cloudCover, 0, `cloud cover remains absent through ${progress}`);
     }
-    for (const progress of [.90, .922, .925, .926]) {
+    for (const progress of [.90, .922]) {
       assert.equal(forwardCloudStates.get(progress).backgroundHex, 0x050711,
         `space backdrop remains exact through ${progress}`);
     }
     const midpointColor = await readBackdropMidpoint(page);
-    assertColorClose(forwardCloudStates.get(.928).backgroundColor, midpointColor,
-      'backdrop uses the Three.Color linear-space midpoint at .928');
-    assert.ok(Math.abs(forwardCloudStates.get(.928).cloudCover - .5) < .001,
-      'cloud cover follows the midpoint of the Earth zoom at .928');
-    for (const progress of [.93, .938, .94]) {
+    assertColorClose(forwardCloudStates.get(.924).backgroundColor, midpointColor,
+      'backdrop uses the Three.Color linear-space midpoint at .924');
+    assert.equal(forwardCloudStates.get(.926).backgroundHex, 0xbccfcf,
+      'backdrop reaches exact city color at the zoom start .926');
+    assert.ok(Math.abs(forwardCloudStates.get(.926).cloudCover - .5) < .001,
+      'cloud cover is halfway revealed at the zoom start .926');
+    assert.ok(Math.abs(forwardCloudStates.get(.928).cloudCover - 1) < .001,
+      'cloud cover reaches full at the Earth zoom midpoint .928');
+    for (const progress of [.928, .93, .938, .94]) {
       assert.ok(Math.abs(forwardCloudStates.get(progress).cloudCover - 1) < .001,
         `cloud cover is full at ${progress}`);
     }
-    for (const progress of [.93, .938, .94, .958, .976]) {
+    for (const progress of [.926, .928, .93, .938, .94, .958, .976]) {
       assert.equal(forwardCloudStates.get(progress).backgroundHex, 0xbccfcf,
         `city backdrop stays exact through the cloud hold/fade at ${progress}`);
     }
@@ -829,25 +926,109 @@ try {
     assertEarthInFrame(zoomEndBounds, viewport.width, viewport.height, `${viewport.width}px Earth zoom completion`);
     assert.ok(arrivalBounds.width < zoomMiddleBounds.width && zoomMiddleBounds.width < zoomEndBounds.width,
       `${viewport.width}px Earth visibly grows through zoom: ${JSON.stringify({arrivalBounds,zoomMiddleBounds,zoomEndBounds})}`);
-    const zoomState = await setStageProgress(page, .928);
+    const zoomState = await setStageProgress(page, .926);
     assert.ok(Math.abs(zoomState.cloudCover - .5) < .001,
-      `${viewport.width}px cloud cover stays synchronized with the zoom at .928`);
+      `${viewport.width}px cloud cover is halfway revealed at zoom start .926`);
     if (viewport.width === 390) {
       await page.setViewportSize({width:412,height:844});
-      await page.waitForFunction(() => Math.abs(window.__journeyScene.getDebugState().targetProgress - .928) < .001
+      await page.waitForFunction(() => Math.abs(window.__journeyScene.getDebugState().targetProgress - .926) < .001
         && Math.abs(window.__journeyScene.getDebugState().cloudCover - .5) < .001);
       const afterViewportResize = await readStageState(page);
       assert.ok(Math.abs(afterViewportResize.progress - zoomState.progress) < .001,
-        'mobile viewport resize preserves normalized Earth-zoom progress');
+        'mobile viewport resize preserves normalized progress at zoom start');
       assert.ok(Math.abs(afterViewportResize.cloudCover - zoomState.cloudCover) < .001,
         'mobile viewport resize preserves synchronized cloud cover');
       assertColorClose(afterViewportResize.backgroundColor, zoomState.backgroundColor,
-        'mobile viewport resize preserves the backdrop color at .928', .0002);
+        'mobile viewport resize preserves the backdrop color at .926', .0002);
       assert.equal(afterViewportResize.backgroundHex, zoomState.backgroundHex,
-        'mobile viewport resize preserves the backdrop endpoint/interpolation state');
+        'mobile viewport resize preserves the completed backdrop color');
       assert.ok(Math.abs(afterViewportResize.distantStarOpacity - zoomState.distantStarOpacity) < .0001,
         'mobile viewport resize preserves independent distant-star opacity');
       await page.setViewportSize(viewport);
+      await page.waitForFunction(() => {
+        const state = window.__journeyScene.getDebugState();
+        return Math.abs(state.progress - state.targetProgress) < .00000001;
+      });
+      // Let resize-driven root remapping finish before direct progress test injection.
+      await waitForStableSceneAndRoot(page);
+    }
+    await setStageProgress(page, .9279999999999999);
+    assert.equal((await readReturnInkState(page)).active, true,
+      `${viewport.width}x${viewport.height} treats the rounded scroll representation of .928 as the city-ink boundary`);
+    const contrastForward = new Map();
+    for (const progress of [.926, .928, .938, .94]) {
+      await setStageProgress(page, progress);
+      contrastForward.set(progress, await readReturnInkState(page));
+    }
+    assert.equal(contrastForward.get(.926).active, false,
+      `${viewport.width}x${viewport.height} keeps the light return ink below .928`);
+    assert.equal(contrastForward.get(.926).title, 'rgb(239, 244, 237)',
+      `${viewport.width}x${viewport.height} keeps the existing pale return title at .926`);
+    assert.equal(contrastForward.get(.928).active, true,
+      `${viewport.width}x${viewport.height} enables city ink when full cloud cover completes at .928`);
+    assert.equal(contrastForward.get(.928).contact, false,
+      `${viewport.width}x${viewport.height} leaves Contact inactive during the return ink band`);
+    assert.equal(contrastForward.get(.928).title, 'rgb(35, 65, 57)');
+    assert.equal(contrastForward.get(.928).subtitle, 'rgb(61, 91, 80)');
+    assert.equal(contrastForward.get(.928).footer, 'rgb(66, 98, 83)');
+    assert.equal(contrastForward.get(.928).footerPlace, 'rgb(66, 98, 83)');
+    assert.equal(contrastForward.get(.928).sceneLabel, 'rgb(66, 98, 83)');
+    assert.equal(contrastForward.get(.928).scrollCue, 'rgb(66, 98, 83)');
+    assert.equal(contrastForward.get(.928).progressFill, 'rgb(69, 111, 96)');
+    const progressTrackChannels = contrastForward.get(.928).progressTrack.match(/[\d.]+/g).map(Number);
+    assert.deepEqual(progressTrackChannels.slice(0, 3), [66, 98, 83],
+      `${viewport.width}x${viewport.height} uses Contact green for the temporary progress track`);
+    assert.ok(progressTrackChannels[3] > .12 && progressTrackChannels[3] < .14,
+      `${viewport.width}x${viewport.height} keeps the progress track translucent`);
+    assert.equal(contrastForward.get(.938).active, true,
+      `${viewport.width}x${viewport.height} retains city ink through .938`);
+    assert.deepEqual(contrastForward.get(.938), contrastForward.get(.928),
+      `${viewport.width}x${viewport.height} keeps the same contrast treatment through the band`);
+    assert.equal(contrastForward.get(.94).active, false,
+      `${viewport.width}x${viewport.height} removes temporary city ink at .94`);
+    assert.equal(contrastForward.get(.94).contact, true,
+      `${viewport.width}x${viewport.height} hands off to Contact at .94`);
+    if (viewport.width === 390) {
+      const belowCloudEnd = await setRootScrollProgress(page, .928, 'floor');
+      assert.ok(belowCloudEnd.expectedProgress < .928,
+        `390x844 floor pixel remains below .928: ${JSON.stringify(belowCloudEnd)}`);
+      assert.equal(belowCloudEnd.returnInk, false,
+        `390x844 root scroll keeps light ink below .928: ${JSON.stringify(belowCloudEnd)}`);
+      const aboveCloudEnd = await setRootScrollProgress(page, .928, 'ceil');
+      assert.ok(aboveCloudEnd.expectedProgress >= .928,
+        `390x844 ceil pixel reaches the .928 band: ${JSON.stringify(aboveCloudEnd)}`);
+      assert.equal(aboveCloudEnd.returnInk, true,
+        `390x844 root scroll enables city ink at .928: ${JSON.stringify(aboveCloudEnd)}`);
+      const belowContact = await setRootScrollProgress(page, .94, 'floor');
+      assert.ok(belowContact.expectedProgress < .94,
+        `390x844 floor pixel remains below .94: ${JSON.stringify(belowContact)}`);
+      assert.equal(belowContact.returnInk, true,
+        `390x844 root scroll retains city ink below .94: ${JSON.stringify(belowContact)}`);
+      assert.equal(belowContact.contact, false,
+        `390x844 Contact remains inactive below .94: ${JSON.stringify(belowContact)}`);
+      const aboveContact = await setRootScrollProgress(page, .94, 'ceil');
+      assert.ok(aboveContact.expectedProgress >= .94,
+        `390x844 ceil pixel reaches Contact at .94: ${JSON.stringify(aboveContact)}`);
+      assert.equal(aboveContact.returnInk, false,
+        `390x844 root scroll clears city ink at .94: ${JSON.stringify(aboveContact)}`);
+      assert.equal(aboveContact.contact, true,
+        `390x844 root scroll activates Contact at .94: ${JSON.stringify(aboveContact)}`);
+      const reverseContact = await setRootScrollProgress(page, .94, 'floor');
+      assert.equal(reverseContact.returnInk, true,
+        `390x844 reverse scrub restores city ink below .94: ${JSON.stringify(reverseContact)}`);
+      const reverseCloud = await setRootScrollProgress(page, .928, 'ceil');
+      assert.equal(reverseCloud.returnInk, true,
+        `390x844 reverse scrub retains city ink above .928: ${JSON.stringify(reverseCloud)}`);
+      const reverseBeforeCloud = await setRootScrollProgress(page, .928, 'floor');
+      assert.equal(reverseBeforeCloud.returnInk, false,
+        `390x844 reverse scrub restores light ink below .928: ${JSON.stringify(reverseBeforeCloud)}`);
+      await setRootScrollProgress(page, .535, 'ceil');
+    }
+    for (const progress of [.938, .928, .926]) {
+      await setStageProgress(page, progress);
+      const reverse = await readReturnInkState(page);
+      assert.deepEqual(reverse, contrastForward.get(progress),
+        `${viewport.width}x${viewport.height} reverse scrub restores the same contrast state at ${progress}`);
     }
     await setStageProgress(page, .535);
     if (viewport.width === 667) {
@@ -959,7 +1140,9 @@ try {
     });
     const reducedStart = await setStageProgress(page, .90);
     const reducedArrival = await setStageProgress(page, .922);
+    const reducedCloudStart = await setStageProgress(page, .924);
     const reducedZoomStart = await setStageProgress(page, .926);
+    const reducedCloudEnd = await setStageProgress(page, .928);
     const reducedZoomEnd = await setStageProgress(page, .93);
     assert.equal(reducedStart.reducedMotion, true);
     assert.equal(reducedStart.animationRunning, false);
@@ -969,20 +1152,29 @@ try {
     assert.deepEqual(reducedZoomEnd.camera, reducedStart.camera, 'reduced motion does not animate the Earth zoom');
     assert.equal(reducedStart.cloudCover, 0, 'reduced motion starts with the veil hidden');
     assert.equal(reducedArrival.cloudCover, 0, 'reduced motion keeps the veil hidden through arrival');
+    assert.equal(reducedCloudStart.cloudCover, 0, 'reduced motion keeps the veil hidden at its reveal start');
     assert.equal(reducedZoomStart.cloudCover, 0, 'reduced motion keeps the veil hidden at zoom start');
+    assert.equal(reducedCloudEnd.cloudCover, 0, 'reduced motion keeps the veil hidden at its reveal end');
     assert.equal(reducedZoomEnd.cloudCover, 0, 'reduced motion does not animate the veil with the zoom');
-    for (const state of [reducedStart, reducedArrival, reducedZoomStart, reducedZoomEnd]) {
+    assert.equal((await readReturnInkState(page)).active, false,
+      'reduced motion does not show the temporary city ink while the backdrop remains in space');
+    for (const state of [reducedStart, reducedArrival, reducedCloudStart, reducedZoomStart, reducedCloudEnd, reducedZoomEnd]) {
       assert.equal(state.backgroundHex, 0x050711, 'reduced motion holds the exact space backdrop before .94');
       assert.equal(state.distantStarOpacity, .66, 'reduced motion preserves the space star opacity before .94');
     }
     assert.deepEqual(await readCatalogVisibility(page), {opacity:1, inert:false, ariaHidden:'false'}, 'reduced motion keeps the complete catalog static before .94');
     const reducedBeforeSnap = await setStageProgress(page, .939);
+    assert.equal((await readReturnInkState(page)).active, false,
+      'reduced motion keeps temporary city ink disabled through .939');
     assert.deepEqual(reducedBeforeSnap.camera, reducedStart.camera, 'reduced-motion camera remains static through .939');
     assert.equal(reducedBeforeSnap.cloudCover, 0, 'reduced-motion veil remains hidden through .939');
     assert.equal(reducedBeforeSnap.backgroundHex, 0x050711, 'reduced motion holds the space backdrop through .939');
     assert.equal(reducedBeforeSnap.distantStarOpacity, .66, 'reduced motion keeps stars on their adjusted-progress curve through .939');
     const reducedContact = await setStageProgress(page, .94);
+    const reducedContactInk = await readReturnInkState(page);
     const reducedEnd = await setStageProgress(page, .976);
+    assert.equal(reducedContactInk.active, false, 'reduced motion clears the temporary city ink at .94');
+    assert.equal(reducedContactInk.contact, true, 'reduced motion activates Contact styling at .94');
     assert.equal(reducedContact.phase, 'city', 'reduced motion snaps to the Contact/city pose at .94');
     assert.notDeepEqual(reducedContact.camera, reducedStart.camera, 'the Contact/city pose is reached by a snap, not animated travel');
     assert.equal(reducedContact.cloudCover, 0, 'reduced motion does not cover the snapped Contact/city scene');

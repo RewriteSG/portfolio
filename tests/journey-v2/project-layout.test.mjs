@@ -16,6 +16,8 @@ for (const count of [0, 1, 3, 8, 64]) {
     assert.equal(layout.returnStart, .90);
     assert.equal(layout.catalogFadeEnd, .91);
     assert.equal(layout.earthArrival, .922);
+    assert.equal(layout.cloudRevealStart, .924);
+    assert.equal(layout.cloudRevealEnd, .928);
     assert.equal(layout.earthZoomStart, .926);
     assert.equal(layout.earthZoomEnd, .93);
     assert.equal(layout.returnEnd, .94);
@@ -71,6 +73,8 @@ for (const count of [0, 1, 3]) {
 
       assert.equal(layout.catalogCameraStart, count ? .818 : .48);
       assert.equal(layout.projectsStageStart, count ? .83 : .535);
+      assert.equal(layout.cloudRevealStart, .924);
+      assert.equal(layout.cloudRevealEnd, .928);
       assert.ok(span(layout.catalogCameraStart, layout.projectsStageStart) >= catalogFloor - 1e-7,
         `catalog camera span ${span(layout.catalogCameraStart, layout.projectsStageStart)} is below ${catalogFloor}`);
       assert.ok(span(layout.returnStart, layout.returnEnd) >= returnFloor - 1e-7,
