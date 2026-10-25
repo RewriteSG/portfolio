@@ -23,13 +23,33 @@ const path = [
   { p: .65, eye: [47, 9, 230], look: [47, 9, -8], earth: [38, 0, -8], scale: .18 },
   { p: .74, eye: [47, 9, 230], look: [47, 9, -8], earth: [38, 0, -8], scale: .18 },
   { p: .83, eye: [47, 9, 230], look: [47, 9, -8], earth: [38, 0, -8], scale: .18 },
-  { p: .90, eye: [47, 9, 230], look: [47, 9, -8], earth: [38, 0, -8], scale: .18 },
-  { p: .922, eye: [7, 20, 43], look: [1, 7, 0], earth: [0, 0, 0], scale: 1 },
-  { p: .93, eye: [11, 16, 30], look: [3, 9, 0], earth: [0, 0, 0], scale: 1 },
-  { p: .94, eye: [35, -82, 47], look: [-5, -118, 0], earth: [0, 0, 0], scale: 1 },
   { p: .973, eye: [30, -94, 37], look: [-5, -118, 0], earth: [0, 0, 0], scale: 1 },
   { p: 1, eye: [30, -94, 37], look: [-5, -118, 0], earth: [0, 0, 0], scale: 1 },
 ];
+
+function buildCameraPath(layout, width = 1440, height = 900, fov = 42) {
+  const catalog = {eye:[47, 9, 230], look:[47, 9, -8], earth:[38, 0, -8], scale:.18};
+  const radius = 20.72;
+  const fovTangent = Math.tan(THREE.MathUtils.degToRad(fov / 2));
+  const viewportDiameter = Math.min(width, height);
+  const distanceForDiameter = diameter => Math.sqrt((radius * height / (diameter * fovTangent)) ** 2 + radius ** 2);
+  const arrivalDistance = distanceForDiameter(viewportDiameter * .78);
+  const zoomDistance = distanceForDiameter(viewportDiameter * .88);
+  const arrivalPitch = Math.min(18, arrivalDistance * .28);
+  const zoomPitch = Math.min(16, zoomDistance * .28);
+  const arrival = {eye:[0, arrivalPitch, Math.sqrt(arrivalDistance ** 2 - arrivalPitch ** 2)], look:[0, 0, 0], earth:[0, 0, 0], scale:1};
+  const zoom = {eye:[0, zoomPitch, Math.sqrt(zoomDistance ** 2 - zoomPitch ** 2)], look:[0, 0, 0], earth:[0, 0, 0], scale:1};
+  const contact = {eye:[35, -82, 47], look:[-5, -118, 0], earth:[0, 0, 0], scale:1};
+  return [
+    ...path.filter(point => point.p < layout.returnStart),
+    {p:layout.returnStart, ...catalog},
+    {p:layout.catalogFadeEnd, ...catalog},
+    {p:layout.earthArrival, ...arrival},
+    {p:layout.earthZoomEnd, ...zoom},
+    {p:layout.returnEnd, ...contact},
+    ...path.filter(point => point.p > layout.returnEnd),
+  ];
+}
 
 function glowTexture() {
   const canvas = document.createElement('canvas');
@@ -168,61 +188,7 @@ export class JourneyScene {
     this.solar.position.set(-18, 0, -8);
     this.scene.add(this.solar);
     this.solarMaterials = [];
-    const sunMaterial = new THREE.ShaderMaterial({
-      uniforms: { uTime: { value: 0 }, uOpacity: { value: 1 }, uReveal: { value: 0 } },
-      transparent: true,
-      vertexShader: `
-        varying vec3 vPosition;
-        varying vec3 vNormal;
-        void main() {
-          vPosition = position;
-          vNormal = normalize(normalMatrix * normal);
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform float uTime;
-        uniform float uOpacity;
-        uniform float uReveal;
-        varying vec3 vPosition;
-        varying vec3 vNormal;
-        float hash3(vec3 p) {
-          p = fract(p * 0.1031);
-          p += dot(p, p.yxz + 33.33);
-          return fract((p.x + p.y) * p.z);
-        }
-        float noise3(vec3 p) {
-          vec3 i = floor(p);
-          vec3 f = fract(p);
-          vec3 u = f * f * (3.0 - 2.0 * f);
-          return mix(
-            mix(mix(hash3(i), hash3(i + vec3(1.0, 0.0, 0.0)), u.x),
-                mix(hash3(i + vec3(0.0, 1.0, 0.0)), hash3(i + vec3(1.0, 1.0, 0.0)), u.x), u.y),
-            mix(mix(hash3(i + vec3(0.0, 0.0, 1.0)), hash3(i + vec3(1.0, 0.0, 1.0)), u.x),
-                mix(hash3(i + vec3(0.0, 1.0, 1.0)), hash3(i + vec3(1.0, 1.0, 1.0)), u.x), u.y), u.z);
-        }
-        void main() {
-          vec3 p = normalize(vPosition);
-          float t = uTime * 0.16;
-          float field = noise3(p * 4.2 + vec3(t, -t * 0.6, t * 0.35)) * 0.68
-            + noise3(p * 9.0 + vec3(-t * 0.45, t * 0.3, 0.0)) * 0.32;
-          float gold = smoothstep(0.18, 0.84, field);
-          float reveal = smoothstep(0.02, 0.92, uReveal);
-          vec3 color = mix(vec3(0.90, 0.58, 0.025), vec3(1.0, 0.84, 0.31), gold);
-          float molten = smoothstep(0.48, 0.78, field + noise3(p * 15.0 + vec3(t * 0.5)) * 0.12);
-          color = mix(color, vec3(1.0, 0.48, 0.035), molten * reveal * 0.34);
-          float veinNoise = noise3(p * 14.0 + vec3(t * 0.35, -t * 0.2, t * 0.15));
-          float ridge = abs(veinNoise - 0.5);
-          float veins = (1.0 - smoothstep(0.0045, 0.018, ridge)) * smoothstep(0.34, 0.72, field);
-          float veinReveal = smoothstep(0.58, 0.95, uReveal);
-          color = mix(color, vec3(0.96, 0.16, 0.025), veins * veinReveal * 0.92);
-          float rim = pow(1.0 - abs(vNormal.z), 2.0);
-          color += rim * vec3(0.13, 0.065, 0.008);
-          gl_FragColor = vec4(color, uOpacity);
-        }
-      `,
-    });
-    this.solarSunMaterial = sunMaterial;
+    const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffd8a0, transparent: true, opacity: 1 });
     this.solarMaterials.push(sunMaterial);
     this.solarSun = new THREE.Mesh(new THREE.SphereGeometry(6.5, 40, 24), sunMaterial);
     this.solar.add(this.solarSun);
@@ -312,6 +278,7 @@ export class JourneyScene {
       this.markerGroup.removeFromParent();
     }
     this.projectLayout = layout;
+    this.cameraPath = buildCameraPath(layout, this.width, this.height, this.camera.fov);
     this.markerGroup = new THREE.Group();
     this.solar.add(this.markerGroup);
     const geometry = layout.ids.length ? new THREE.SphereGeometry(3.3, 24, 16) : null;
@@ -478,6 +445,7 @@ export class JourneyScene {
     this.camera.aspect = this.width / this.height;
     this.camera.fov = this.mobile ? 46 : 42;
     this.camera.updateProjectionMatrix();
+    this.cameraPath = buildCameraPath(this.projectLayout, this.width, this.height, this.camera.fov);
     if (this.cloudMaterial) this.cloudMaterial.uniforms.uAspect.value = this.camera.aspect;
     this.dirty = true;
   }
@@ -508,9 +476,10 @@ export class JourneyScene {
   }
 
   updateCamera(p, solarIntroEnd) {
-    let from = path[0], to = path[1];
-    for (let i = 1; i < path.length; i++) {
-      if (p <= path[i].p) { from = path[i - 1]; to = path[i]; break; }
+    const cameraPath = this.cameraPath;
+    let from = cameraPath[0], to = cameraPath[1];
+    for (let i = 1; i < cameraPath.length; i++) {
+      if (p <= cameraPath[i].p) { from = cameraPath[i - 1]; to = cameraPath[i]; break; }
     }
     const t = smooth(from.p, to.p, p);
     this.camera.position.fromArray(from.eye).lerp(new THREE.Vector3(...to.eye), t);
@@ -518,22 +487,22 @@ export class JourneyScene {
     this.earth.group.position.fromArray(from.earth).lerp(new THREE.Vector3(...to.earth), t);
     this.earth.group.scale.setScalar(lerp(from.scale, to.scale, t));
     if (this.mobile) {
-      if (p < .90) {
+      if (p < this.projectLayout.returnStart) {
         const about = smooth(.19, .265, p) * (1 - smooth(.40, .55, p));
         this.camera.position.z += about * 20;
         this.look.x = this.look.x * (1 - about) + about * 3;
         this.look.y += about * 6;
       } else {
-        const amount = smooth(.90, .94, p);
-        this.camera.position.x += amount * 11;
-        this.camera.position.y += amount * 9;
-        this.camera.position.z += amount * 24;
-        this.look.x += amount * 5;
-        this.look.y += amount * 14;
+        const cityTransition = smooth(this.projectLayout.earthZoomEnd, this.projectLayout.returnEnd, p);
+        this.camera.position.x += cityTransition * 11;
+        this.camera.position.y += cityTransition * 9;
+        this.camera.position.z += cityTransition * 24;
+        this.look.x += cityTransition * 5;
+        this.look.y += cityTransition * 14;
       }
     }
-    const returnBlend = smooth(.90, .94, p);
-    const solar = smooth(.48, solarIntroEnd, p) * (1 - returnBlend);
+    const returnTravel = smooth(this.projectLayout.catalogFadeEnd, this.projectLayout.earthArrival, p);
+    const solar = smooth(.48, solarIntroEnd, p) * (1 - returnTravel);
     const hasOrbit = this.projectLayout.ids.length > 0;
     const stacked = this.mobile && this.height > 500;
     const radiusPixels = stacked ? Math.min(this.width * .31, this.height * .145) : Math.min(this.width * .205, this.height * .25);
@@ -545,7 +514,7 @@ export class JourneyScene {
     const overviewLook = new THREE.Vector3(solarX, solarY, -8);
 
     const catalogBlend = hasOrbit
-      ? smooth(this.projectLayout.projectsStageStart - .012, this.projectLayout.projectsStageStart, p) * (1 - returnBlend)
+      ? smooth(this.projectLayout.projectsStageStart - .012, this.projectLayout.projectsStageStart, p) * (1 - returnTravel)
       : solar;
     const orbitScale = lerp(1, .65, solar);
     const subjectWidth = stacked ? this.width * .5 : this.width * .5 - Math.min(24, this.width * .04) * 2;
@@ -586,7 +555,6 @@ export class JourneyScene {
       this.look.lerp(catalogLook, solar);
     }
     this.catalogZoom = catalogBlend;
-    this.solarReveal = catalogBlend;
     this.catalogSunScaleX = catalogSunScaleX;
     this.catalogSunScaleZ = catalogSunScaleZ;
     this.orbitLabelOffset = Math.min(stacked ? 42 : 58, radiusPixels * .45);
@@ -615,7 +583,7 @@ export class JourneyScene {
       ? this.projectLayout.chapterStart
       : this.projectLayout.projectsStageStart;
     this.updateCamera(p, solarIntroEnd);
-    const orbitMorph = smooth(.48, solarIntroEnd, p) * (1 - smooth(.90, .94, p));
+    const orbitMorph = smooth(.48, solarIntroEnd, p) * (1 - smooth(this.projectLayout.catalogFadeEnd, this.projectLayout.earthArrival, p));
     const orbitScale = lerp(1, .65, orbitMorph);
     const stacked = this.mobile && this.height > 500;
     const aspectScale = stacked ? 1 : .8 * this.width / this.height;
@@ -632,7 +600,7 @@ export class JourneyScene {
     this.earth.group.visible = p >= .155 && p < .94;
     this.earth.update(this.time, smooth(.25, .52, p), this.reducedMotion);
     const solarOpacityEnd = Math.min(.55, this.projectLayout.projectsStageStart);
-    const solarOpacity = smooth(.40, solarOpacityEnd, p) * (1 - smooth(.90, .94, p));
+    const solarOpacity = smooth(.40, solarOpacityEnd, p) * (1 - smooth(this.projectLayout.catalogFadeEnd, this.projectLayout.returnEnd, p));
     this.solarOpacity = solarOpacity;
     this.solar.visible = solarOpacity > .001;
     this.solarMaterials.forEach(material => { material.opacity = material.userData.baseOpacity * solarOpacity; });
@@ -647,22 +615,19 @@ export class JourneyScene {
       halo.material.opacity = solarOpacity * (index === selectedIndex ? .55 : .2);
       planet.material.emissiveIntensity = index === selectedIndex ? .9 : .6;
     });
-    this.city.group.visible = p > .938;
+    this.city.group.visible = p > this.projectLayout.returnEnd - .002;
     if (this.city.group.visible) this.city.update(this.time, this.reducedMotion);
-    const cityBlend = smooth(.90, .94, p);
+    const cityBlend = smooth(this.projectLayout.returnStart, this.projectLayout.returnEnd, p);
     this.scene.background.set(0x050711).lerp(new THREE.Color(0xbccfcf), cityBlend);
     this.distantStars.visible = cityBlend < .999;
     this.distantStars.material.opacity = .66 * (1 - cityBlend);
-    this.cloudCover = smooth(.90, .94, p) * (1 - smooth(.94, .976, p));
+    this.cloudCover = smooth(this.projectLayout.returnStart, this.projectLayout.returnEnd, p) * (1 - smooth(this.projectLayout.returnEnd, .976, p));
     this.cloudPass.visible = this.cloudCover > .001;
     this.cloudMaterial.uniforms.uCover.value = this.cloudCover;
     this.cloudMaterial.uniforms.uTime.value = this.time;
     this.updateProjectFocus(now);
-    this.solarSunMaterial.uniforms.uTime.value = this.reducedMotion ? 0 : this.time;
-    this.solarSunMaterial.uniforms.uReveal.value = this.solarReveal;
-    this.solarSunMaterial.uniforms.uOpacity.value = this.solarSunMaterial.opacity;
     this.renderer.render(this.scene, this.camera);
-    this.container.dataset.world = p < .10 ? 'hello' : p < .22 ? 'descent' : p < .48 ? 'earth' : p < .90 ? 'solar' : p < .94 ? 'return' : 'city';
+    this.container.dataset.world = p < .10 ? 'hello' : p < .22 ? 'descent' : p < .48 ? 'earth' : p < this.projectLayout.returnStart ? 'solar' : p < this.projectLayout.returnEnd ? 'return' : 'city';
     this.onProgress(this.progress);
     this.dirty = false;
   }

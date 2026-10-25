@@ -1,6 +1,11 @@
 const START = .565;
 const SPAN = .265;
 const END = .83;
+const RETURN_START = .90;
+const CATALOG_FADE_END = .91;
+const EARTH_ARRIVAL = .922;
+const EARTH_ZOOM_END = .93;
+const RETURN_END = .94;
 const clamp = value => Math.max(0, Math.min(1, Number.isNaN(value) ? 0 : value));
 
 /** Stable positions and colors, independent of rendering and the browser. */
@@ -27,9 +32,12 @@ export function buildProjectLayout(projectIds = []) {
     chapterStart:START,
     chapterEnd:END,
     projectsStageStart:count ? END : .535,
-    projectsStageEnd:.90,
-    returnStart:.90,
-    returnEnd:.94,
+    projectsStageEnd:RETURN_START,
+    returnStart:RETURN_START,
+    catalogFadeEnd:CATALOG_FADE_END,
+    earthArrival:EARTH_ARRIVAL,
+    earthZoomEnd:EARTH_ZOOM_END,
+    returnEnd:RETURN_END,
   };
   const markerCount = Math.min(32, count);
   layout.markers = Array.from({length:markerCount}, (_, index) => projectOrbit(layout, Math.floor(index * count / markerCount)));

@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import {inflateSync} from 'node:zlib';
 
 const {chromium} = await import(process.env.JOURNEY_PLAYWRIGHT_MODULE || 'playwright');
 const base = process.env.JOURNEY_BASE_URL || 'http://127.0.0.1:4173/';
@@ -42,15 +41,26 @@ function readStageState(page) {
     return {
       progress:state.targetProgress,
       localProgress:(state.targetProgress - start) / (end - start),
+      phase:state.phase,
       reducedMotion:state.reducedMotion,
       animationRunning:state.animationRunning,
       camera:state.camera,
+      look:scene.look.toArray(),
       solarScale:scene.solar.scale.toArray(),
       sunMeshScale:scene.solarSun.scale.toArray(),
       sunOpacity:scene.getOrbitLayout().opacity,
-      shaderOpacity:scene.solarSunMaterial.uniforms.uOpacity.value,
-      shaderTime:scene.solarSunMaterial.uniforms.uTime.value,
-      sunReveal:scene.solarSunMaterial.uniforms.uReveal.value,
+      sunMaterialType:scene.solarSun.material.type,
+      sunMaterialColor:scene.solarSun.material.color?.getHex() ?? null,
+      sunHasUniforms:Boolean(scene.solarSun.material.uniforms),
+      haloColor:scene.solar.children.find(child => child.isSprite && child.material.color.getHex() === 0xffcf88)?.material.color.getHex() ?? null,
+      cloudMaterialType:scene.cloudMaterial.type,
+      returnPhases:{
+        returnStart:scene.projectLayout.returnStart,
+        catalogFadeEnd:scene.projectLayout.catalogFadeEnd,
+        earthArrival:scene.projectLayout.earthArrival,
+        earthZoomEnd:scene.projectLayout.earthZoomEnd,
+        returnEnd:scene.projectLayout.returnEnd,
+      },
     };
   });
 }
@@ -140,81 +150,50 @@ function projectedSunBounds(page, progress) {
   }, progress);
 }
 
-function decodePng(png) {
-  let width = 0, height = 0, bitDepth = 0, colorType = 0, interlace = 0;
-  const imageData = [];
-  for (let offset = 8; offset < png.length;) {
-    const length = png.readUInt32BE(offset);
-    const type = png.toString('ascii', offset + 4, offset + 8);
-    const dataStart = offset + 8;
-    if (type === 'IHDR') {
-      width = png.readUInt32BE(dataStart);
-      height = png.readUInt32BE(dataStart + 4);
-      bitDepth = png[dataStart + 8];
-      colorType = png[dataStart + 9];
-      interlace = png[dataStart + 12];
-    } else if (type === 'IDAT') imageData.push(png.subarray(dataStart, dataStart + length));
-    offset = dataStart + length + 4;
-    if (type === 'IEND') break;
-  }
-  assert.equal(bitDepth, 8, 'browser screenshot uses 8-bit color');
-  assert.ok(colorType === 2 || colorType === 6, `browser screenshot uses RGB or RGBA color, received ${colorType}`);
-  assert.equal(interlace, 0, 'browser screenshot is not interlaced');
-  const bytesPerPixel = colorType === 6 ? 4 : 3;
-  const rowLength = width * bytesPerPixel;
-  const raw = inflateSync(Buffer.concat(imageData));
-  const pixels = Buffer.alloc(height * rowLength);
-  const paeth = (left, above, upperLeft) => {
-    const estimate = left + above - upperLeft;
-    const leftDistance = Math.abs(estimate - left);
-    const aboveDistance = Math.abs(estimate - above);
-    const upperLeftDistance = Math.abs(estimate - upperLeft);
-    return leftDistance <= aboveDistance && leftDistance <= upperLeftDistance ? left : aboveDistance <= upperLeftDistance ? above : upperLeft;
-  };
-  for (let y = 0; y < height; y++) {
-    const sourceRow = y * (rowLength + 1);
-    const targetRow = y * rowLength;
-    const filter = raw[sourceRow];
-    for (let index = 0; index < rowLength; index++) {
-      const left = index >= bytesPerPixel ? pixels[targetRow + index - bytesPerPixel] : 0;
-      const above = y ? pixels[targetRow + index - rowLength] : 0;
-      const upperLeft = y && index >= bytesPerPixel ? pixels[targetRow + index - rowLength - bytesPerPixel] : 0;
-      const predictor = filter === 0 ? 0
-        : filter === 1 ? left
-          : filter === 2 ? above
-            : filter === 3 ? Math.floor((left + above) / 2)
-              : filter === 4 ? paeth(left, above, upperLeft) : NaN;
-      assert.ok(Number.isFinite(predictor), `PNG uses a supported row filter, received ${filter}`);
-      pixels[targetRow + index] = (raw[sourceRow + 1 + index] + predictor) & 0xff;
+function projectedEarthBounds(page, progress) {
+  return page.evaluate(progress => {
+    const scene = window.__journeyScene;
+    scene.setProgress(progress, true);
+    scene.frame(performance.now());
+    const earthSurface = scene.earth.group.children[0];
+    const Vector3 = scene.camera.position.constructor;
+    const radius = earthSurface.geometry.parameters.radius;
+    earthSurface.updateMatrixWorld(true);
+    scene.camera.updateMatrixWorld(true);
+    const center = earthSurface.getWorldPosition(new Vector3());
+    const localEye = earthSurface.worldToLocal(scene.camera.position.clone());
+    const eyeDistance = localEye.length();
+    const eyeDirection = localEye.clone().normalize();
+    const tangentCenter = eyeDirection.clone().multiplyScalar(radius ** 2 / eyeDistance);
+    const tangentRadius = radius * Math.sqrt(1 - (radius / eyeDistance) ** 2);
+    const reference = Math.abs(eyeDirection.y) < .95 ? new Vector3(0, 1, 0) : new Vector3(1, 0, 0);
+    const right = new Vector3().crossVectors(eyeDirection, reference).normalize();
+    const up = new Vector3().crossVectors(eyeDirection, right).normalize();
+    const points = [];
+    for (let index = 0; index < 128; index++) {
+      const angle = index / 128 * Math.PI * 2;
+      const point = tangentCenter.clone()
+        .addScaledVector(right, Math.cos(angle) * tangentRadius)
+        .addScaledVector(up, Math.sin(angle) * tangentRadius)
+        .applyMatrix4(earthSurface.matrixWorld)
+        .project(scene.camera);
+      points.push({x:(point.x * .5 + .5) * innerWidth, y:(-point.y * .5 + .5) * innerHeight});
     }
-  }
-  return {width, height, bytesPerPixel, pixels};
+    const xs = points.map(point => point.x);
+    const ys = points.map(point => point.y);
+    const projectedCenter = center.clone().project(scene.camera);
+    return {
+      center:{x:(projectedCenter.x * .5 + .5) * innerWidth, y:(-projectedCenter.y * .5 + .5) * innerHeight},
+      left:Math.min(...xs), right:Math.max(...xs), top:Math.min(...ys), bottom:Math.max(...ys),
+      width:Math.max(...xs) - Math.min(...xs), height:Math.max(...ys) - Math.min(...ys),
+    };
+  }, progress);
 }
 
-function measureSunRedCoverage(png, bounds) {
-  const image = decodePng(png);
-  const pointInPolygon = (x, y, polygon) => {
-    let inside = false;
-    for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
-      const currentPoint = polygon[index];
-      const previousPoint = polygon[previous];
-      if ((currentPoint.y > y) !== (previousPoint.y > y)
-        && x < (previousPoint.x - currentPoint.x) * (y - currentPoint.y)
-          / (previousPoint.y - currentPoint.y) + currentPoint.x) inside = !inside;
-    }
-    return inside;
-  };
-  let diskPixels = 0, redPixels = 0;
-  for (let y = Math.max(0, Math.floor(bounds.top)); y < Math.min(image.height, Math.ceil(bounds.bottom)); y++) {
-    for (let x = Math.max(0, Math.floor(bounds.left)); x < Math.min(image.width, Math.ceil(bounds.right)); x++) {
-      if (!pointInPolygon(x + .5, y + .5, bounds.silhouette)) continue;
-      diskPixels++;
-      const index = (y * image.width + x) * image.bytesPerPixel;
-      const red = image.pixels[index], green = image.pixels[index + 1], blue = image.pixels[index + 2];
-      if (red >= 185 && green <= 125 && blue <= 95 && red - green >= 70) redPixels++;
-    }
-  }
-  return {redPixels, diskPixels, coverage:redPixels / diskPixels};
+function assertEarthInFrame(bounds, width, height, label) {
+  assert.ok(bounds.width > 0 && bounds.height > 0, `${label} has a nonempty projected Earth: ${JSON.stringify(bounds)}`);
+  assert.ok(bounds.left >= 0 && bounds.top >= 0 && bounds.right <= width && bounds.bottom <= height,
+    `${label} keeps Earth fully inside the viewport: ${JSON.stringify(bounds)}`);
 }
 
 try {
@@ -246,7 +225,19 @@ try {
     const stageEntryBounds = await projectedSunBounds(page, .535);
     const stageMiddle = await setStageProgress(page, .72);
     assert.ok(Math.abs(stageEntry.progress - .535) < .0001, 'zero-orbit catalog follows the solar intro');
-    assert.equal(stageEntry.sunReveal, 1, 'zero-orbit direct entry reveals the stage Sun detail');
+    assert.deepEqual(stageEntry.returnPhases, {
+      returnStart:.90, catalogFadeEnd:.91, earthArrival:.922, earthZoomEnd:.93, returnEnd:.94,
+    });
+    assert.deepEqual({
+      type:stageEntry.sunMaterialType,
+      color:stageEntry.sunMaterialColor,
+      hasUniforms:stageEntry.sunHasUniforms,
+      haloColor:stageEntry.haloColor,
+      cloudMaterialType:stageEntry.cloudMaterialType,
+    }, {
+      type:'MeshBasicMaterial', color:0xffd8a0, hasUniforms:false,
+      haloColor:0xffcf88, cloudMaterialType:'ShaderMaterial',
+    }, 'the Sun is a flat yellow surface with a separate halo while cloud shading remains');
     assert.ok(Math.abs(stageEntryBounds.center.x - 360) < 2 && Math.abs(stageEntryBounds.center.y - 450) < 2,
       `zero-orbit catalog centers the Sun in the left subject slot: ${JSON.stringify(stageEntryBounds)}`);
     assert.ok(Math.abs(stageEntryBounds.width - 270) < 2 && Math.abs(stageEntryBounds.height - 270) < 2,
@@ -255,19 +246,15 @@ try {
       `zero-orbit catalog keeps the perspective-correct Sun silhouette circular: ${JSON.stringify(stageEntryBounds)}`);
     assert.deepEqual(stageMiddle.camera, stageEntry.camera, 'camera composition is settled at the zero-orbit stage entry');
     assert.deepEqual(stageMiddle.solarScale, stageEntry.solarScale, 'Sun scale stays fixed through the zero-orbit catalog stage');
-    assert.equal(stageMiddle.sunReveal, stageEntry.sunReveal, 'shader reveal stays fixed through the zero-orbit catalog stage');
+    assert.equal(stageMiddle.sunMaterialColor, stageEntry.sunMaterialColor, 'the flat Sun color stays fixed through the zero-orbit catalog stage');
     assert.equal(stageMiddle.sunOpacity, stageEntry.sunOpacity, 'Sun stays fully bright throughout the zero-orbit catalog stage');
-    assert.equal(stageMiddle.shaderOpacity, stageEntry.shaderOpacity, 'Sun shader stays fully bright throughout the zero-orbit catalog stage');
     assert.equal(stageEntry.sunOpacity, 1, 'Sun is fully bright when the zero-orbit stage begins');
-    assert.equal(stageEntry.shaderOpacity, 1, 'Sun shader is fully bright when the zero-orbit stage begins');
     const stageEnd = await setStageProgress(page, .899);
     const stageEndBounds = await projectedSunBounds(page, .899);
     assert.deepEqual(stageEnd.camera, stageEntry.camera, 'camera composition stays fixed until the zero-orbit stage ends');
     assert.deepEqual(stageEndBounds, stageEntryBounds, 'the zero-orbit Sun projection stays fixed through .899');
     assert.deepEqual(stageEnd.solarScale, stageEntry.solarScale, 'Sun scale stays fixed until the zero-orbit stage ends');
     assert.equal(stageEnd.sunOpacity, 1, 'Sun remains fully bright through the zero-orbit stage end');
-    assert.equal(stageEnd.shaderOpacity, 1, 'Sun shader remains fully bright through the zero-orbit stage end');
-    assert.equal(stageEnd.sunReveal, 1, 'the molten reveal stays settled through .899');
     const zeroOrbitBoundary = await page.evaluate(() => {
       const scene = window.__journeyScene;
       document.activeElement?.blur();
@@ -285,8 +272,37 @@ try {
     assert.equal(zeroOrbitBoundary.after.inert, false);
     await setStageProgress(page, .535);
     assert.equal(await page.locator('#project-catalog-grid img').getAttribute('alt'), 'Catalog Project 0 project preview');
+
+    const zeroReturnStart = await setStageProgress(page, .90);
+    const zeroFadeMiddle = await setStageProgress(page, .905);
+    const zeroFadeEnd = await setStageProgress(page, .91);
+    assert.deepEqual(zeroFadeMiddle.camera, zeroReturnStart.camera, 'zero-orbit camera stays in the catalog composition while it fades');
+    assert.deepEqual(zeroFadeMiddle.look, zeroReturnStart.look, 'zero-orbit camera aim stays fixed while the catalog fades');
+    assert.equal((await readCatalogVisibility(page)).opacity, 0, 'zero-orbit catalog fade completes at .91');
+    assert.deepEqual(zeroFadeEnd.camera, zeroReturnStart.camera, 'zero-orbit camera remains held through the fade-complete boundary');
+    assert.deepEqual(zeroFadeEnd.look, zeroReturnStart.look);
+    const zeroTravel = await setStageProgress(page, .916);
+    assert.notDeepEqual(zeroTravel.camera, zeroFadeEnd.camera, 'zero-orbit camera travel starts after the catalog fade');
+    const zeroArrival = await setStageProgress(page, .922);
+    const zeroArrivalBounds = await projectedEarthBounds(page, .922);
+    const zeroZoomMiddle = await setStageProgress(page, .926);
+    const zeroZoomMiddleBounds = await projectedEarthBounds(page, .926);
+    const zeroZoomEnd = await setStageProgress(page, .93);
+    const zeroZoomEndBounds = await projectedEarthBounds(page, .93);
+    assert.ok(zeroArrival.camera.some((value, index) => Math.abs(value - zeroTravel.camera[index]) > .1), 'zero-orbit travel reaches the Earth-facing pose');
+    assertEarthInFrame(zeroArrivalBounds, 1440, 900, 'zero-orbit Earth arrival');
+    assertEarthInFrame(zeroZoomMiddleBounds, 1440, 900, 'zero-orbit mid-zoom');
+    assertEarthInFrame(zeroZoomEndBounds, 1440, 900, 'zero-orbit zoom completion');
+    assert.ok(zeroArrivalBounds.width < zeroZoomMiddleBounds.width && zeroZoomMiddleBounds.width < zeroZoomEndBounds.width,
+      `zero-orbit Earth grows during the distinct zoom: ${JSON.stringify({zeroArrivalBounds,zeroZoomMiddleBounds,zeroZoomEndBounds})}`);
+    assert.equal(zeroZoomEnd.returnPhases.earthZoomEnd, .93);
+    const zeroReverseTravel = await setStageProgress(page, .916);
+    const zeroReverseFade = await setStageProgress(page, .905);
+    assert.notDeepEqual(zeroReverseTravel.camera, zeroZoomMiddle.camera, 'zero-orbit camera scrubs back from zoom toward catalog');
+    assert.deepEqual(zeroReverseFade.camera, zeroFadeMiddle.camera, 'zero-orbit reverse scrub returns to the same fade camera pose');
+    assert.equal((await readCatalogVisibility(page)).opacity, .5, 'zero-orbit catalog fade reverses with scroll');
     assert.deepEqual(errors, []);
-    console.log('PASS single-project catalog shows 01 / 01 with native disabled arrows and no orbit markers');
+    console.log('PASS zero-orbit catalog and Earth return phases scrub in order through arrival, zoom, and reverse scroll');
     await page.close();
   }
 
@@ -295,7 +311,8 @@ try {
     assert.deepEqual(await page.evaluate(() => ({orbit:window.__journeyProjects.presentation.orbitCount, chapters:window.__journeyProjects.presentation.chapters.length, controls:window.__journeyProjects.presentation.controls.length, details:window.__journeyProjects.presentation.details.length})), {orbit:1, chapters:1, controls:1, details:13});
     const directStage = await readStageState(page);
     assert.ok(Math.abs(directStage.progress - .83) < .0001, `direct #projects hash starts after the featured orbit at .83, received ${directStage.progress}`);
-    assert.equal(directStage.sunReveal, 1, 'direct catalog entry settles the shader reveal');
+    assert.equal(directStage.sunMaterialType, 'MeshBasicMaterial', 'direct catalog entry uses a flat Sun surface');
+    assert.equal(directStage.sunMaterialColor, 0xffd8a0);
     const directSunBounds = await projectedSunBounds(page, .83);
     assert.ok(Math.abs(directSunBounds.center.x - 360) < 2 && Math.abs(directSunBounds.center.y - 450) < 2,
       `direct catalog entry puts the Sun in the left subject slot: ${JSON.stringify(directSunBounds)}`);
@@ -381,7 +398,6 @@ try {
     const finalOrbitExit = await setStageProgress(page, .817);
     assert.deepEqual(finalOrbitExit.camera, orbitOverview.camera, 'the orbit overview remains steady until the final chapter content exits');
     assert.deepEqual(finalOrbitExit.solarScale, orbitOverview.solarScale, 'the orbit overview keeps the shared solar-group scale unchanged');
-    assert.equal(finalOrbitExit.sunReveal, 0, 'molten detail stays hidden while the final orbit chapter remains visible');
     const orbitBounds = await projectedSolarBounds(page, .817);
     assert.ok(Math.abs(orbitBounds.width / 1440 - .40) < .04, `the orbit overview remains about 40vw wide before handoff: ${JSON.stringify(orbitBounds)}`);
     assert.ok(Math.abs(orbitBounds.height / 900 - .50) < .06, `the orbit overview remains about 50vh tall before handoff: ${JSON.stringify(orbitBounds)}`);
@@ -389,7 +405,6 @@ try {
     assert.notDeepEqual(catalogEntry.camera, finalOrbitExit.camera, 'the camera transitions after the orbit content exits');
     assert.deepEqual(catalogEntry.solarScale, finalOrbitExit.solarScale, 'catalog framing leaves the shared solar-group transform unchanged');
     assert.notDeepEqual(catalogEntry.sunMeshScale, finalOrbitExit.sunMeshScale, 'roundness compensation is confined to the Sun mesh');
-    assert.equal(catalogEntry.sunReveal, 1, 'shader reveal reaches its final value at catalog entry');
     const catalogBounds = await projectedSunBounds(page, .83);
     assert.ok(Math.abs(catalogBounds.center.x - 360) < 2 && Math.abs(catalogBounds.center.y - 450) < 2,
       `wide catalog centers the Sun at 25vw / 50vh: ${JSON.stringify(catalogBounds)}`);
@@ -399,30 +414,19 @@ try {
       `wide catalog uses the perspective-correct sphere silhouette: ${JSON.stringify(catalogBounds)}`);
 
     const beforePageChange = await setStageProgress(page, .86);
-    await page.waitForTimeout(100);
-    await page.evaluate(() => window.__journeyScene.frame(performance.now()));
-    const movingSun = await readStageState(page);
-    assert.ok(movingSun.shaderTime > beforePageChange.shaderTime,
-      `the procedural molten detail animates when motion is allowed: ${JSON.stringify({beforePageChange,movingSun})}`);
-    assert.equal(movingSun.sunReveal, 1, 'the shader reveal remains settled throughout the catalog stage');
-    const redCoverageSamples = [];
-    for (const shaderTime of [0, 2, 5, 8]) {
-      await page.evaluate(shaderTime => {
-        const scene = window.__journeyScene;
-        scene.setProgress(.86, true);
-        scene.time = shaderTime;
-        scene.previousTime = performance.now();
-        scene.frame(performance.now());
-      }, shaderTime);
-      const boundsAtTime = await projectedSunBounds(page, .86);
-      const coverage = measureSunRedCoverage(await page.locator('.journey-canvas').screenshot(), boundsAtTime);
-      assert.ok(coverage.coverage >= .02 && coverage.coverage < .04,
-        `red-orange detail stays visible and below 4% at uTime=${shaderTime}: ${JSON.stringify(coverage)}`);
-      redCoverageSamples.push({shaderTime, coverage:Number((coverage.coverage * 100).toFixed(2))});
-    }
-    console.log(`PASS red accents stay within the 2–4% disk target across shader frames: ${JSON.stringify(redCoverageSamples)}`);
-    // Keep the focused-panel accessibility override from masking its visual exit timing.
-    await page.locator('.main-nav a[href="#about"]').focus();
+    assert.equal(beforePageChange.sunMaterialType, 'MeshBasicMaterial');
+    assert.equal(beforePageChange.sunMaterialColor, 0xffd8a0);
+    assert.equal(beforePageChange.sunHasUniforms, false, 'Sun surface has no shader uniforms or animated reveal state');
+    assert.equal(beforePageChange.haloColor, 0xffcf88, 'the independent soft halo remains warm colored');
+    assert.equal(beforePageChange.cloudMaterialType, 'ShaderMaterial', 'unrelated cloud shading remains intact');
+    // Verify the keyboard focus handoff before allowing the normal-motion catalog fade.
+    await next.focus();
+    await page.keyboard.press('Tab');
+    const keyboardFocus = await page.evaluate(() => ({
+      insideCatalog:document.querySelector('#projects').contains(document.activeElement),
+      focusVisible:document.activeElement.matches(':focus-visible'),
+    }));
+    assert.deepEqual(keyboardFocus, {insideCatalog:true, focusVisible:true}, 'keyboard navigation leaves visible focus inside the catalog');
     await setStageProgress(page, .895);
     const beforeReturn = await readCatalogVisibility(page);
     assert.deepEqual(beforeReturn, {opacity:1, inert:false, ariaHidden:'false'}, 'catalog remains fully visible and interactive through .895');
@@ -430,28 +434,64 @@ try {
     const steadyBounds = await projectedSunBounds(page, .899);
     assert.deepEqual(steadyEnd.camera, beforePageChange.camera, 'camera remains fixed throughout the catalog stage');
     assert.deepEqual(steadyBounds, catalogBounds, 'the projected Sun remains fixed from catalog entry through .899');
-    assert.equal(steadyEnd.sunReveal, 1, 'shader detail remains fixed through .899');
     assert.deepEqual(steadyEnd.solarScale, beforePageChange.solarScale, 'Sun scale remains fixed throughout the catalog stage');
     assert.ok(steadyEnd.sunOpacity > .999 && beforePageChange.sunOpacity > .999, 'Sun opacity remains full through .90');
-    assert.ok(steadyEnd.shaderOpacity > .999 && beforePageChange.shaderOpacity > .999, 'shader opacity remains full through .90');
+    const scrollBeforeHandoff = await page.evaluate(() => scrollY);
     const returnStart = await setStageProgress(page, .90);
     assert.deepEqual(returnStart.camera, beforePageChange.camera, 'the return begins without a camera jump at .90');
     assert.deepEqual(returnStart.solarScale, beforePageChange.solarScale, 'the return begins without a scale jump at .90');
     assert.ok(returnStart.sunOpacity > .999, 'Sun opacity remains full at the return boundary');
-    assert.equal(returnStart.sunReveal, 1, 'molten detail remains settled at the .90 return boundary');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'scroll-cue', 'keyboard focus moves to the visible continuation link at .90');
+    assert.equal(await page.evaluate(() => scrollY), scrollBeforeHandoff, 'the keyboard focus handoff does not change the scroll position');
     assert.deepEqual(await readCatalogVisibility(page), {opacity:1, inert:false, ariaHidden:'false'}, 'catalog remains visible and interactive at the .90 return boundary');
-    const returning = await setStageProgress(page, .92);
-    assert.notDeepEqual(returning.camera, beforePageChange.camera, 'camera movement occurs inside .90–.94');
-    assert.ok(returning.sunOpacity > .35 && returning.sunOpacity < .65, 'Sun fades inside .90–.94');
-    assert.ok(returning.sunReveal > .35 && returning.sunReveal < .65, 'molten detail follows the return camera blend');
-    const catalogReturning = await readCatalogVisibility(page);
-    assert.ok(catalogReturning.opacity > .35 && catalogReturning.opacity < .65, `catalog exit begins during .90–.94: ${JSON.stringify(catalogReturning)}`);
-    assert.equal(catalogReturning.inert, false, 'catalog remains interactive while it is visibly returning');
-    assert.equal(catalogReturning.ariaHidden, 'false');
+    const fadeMiddle = await setStageProgress(page, .905);
+    const catalogFadeMiddle = await readCatalogVisibility(page);
+    assert.ok(catalogFadeMiddle.opacity > .45 && catalogFadeMiddle.opacity < .55, `catalog fades during .90–.91: ${JSON.stringify(catalogFadeMiddle)}`);
+    assert.equal(catalogFadeMiddle.inert, false, 'catalog remains interactive while it is visibly fading');
+    assert.deepEqual(fadeMiddle.camera, returnStart.camera, 'camera holds still while catalog presentation fades');
+    const fadeComplete = await setStageProgress(page, .91);
+    assert.deepEqual(fadeComplete.camera, returnStart.camera, 'camera remains held through the named fade-complete boundary');
+    assert.deepEqual(fadeComplete.look, returnStart.look, 'camera aim remains held through the catalog fade');
+    assert.deepEqual(await readCatalogVisibility(page), {opacity:0, inert:true, ariaHidden:'true'}, 'catalog is inert and hidden once its fade completes');
+    assert.equal(await page.locator('.return-message').getAttribute('data-start'), '0.91', 'the return message starts only after the catalog fade completes');
+    const travel = await setStageProgress(page, .916);
+    assert.notDeepEqual(travel.camera, fadeComplete.camera, 'camera travel starts only after the catalog fade');
+    const arrival = await setStageProgress(page, .922);
+    const arrivalBounds = await projectedEarthBounds(page, .922);
+    const zoomMiddle = await setStageProgress(page, .926);
+    const zoomMiddleBounds = await projectedEarthBounds(page, .926);
+    const zoomComplete = await setStageProgress(page, .93);
+    const zoomCompleteBounds = await projectedEarthBounds(page, .93);
+    assertEarthInFrame(arrivalBounds, 1440, 900, 'orbit Earth arrival');
+    assertEarthInFrame(zoomMiddleBounds, 1440, 900, 'orbit mid-zoom');
+    assertEarthInFrame(zoomCompleteBounds, 1440, 900, 'orbit zoom completion');
+    assert.ok(arrivalBounds.width < zoomMiddleBounds.width && zoomMiddleBounds.width < zoomCompleteBounds.width,
+      `Earth grows through a distinct zoom after arrival: ${JSON.stringify({arrivalBounds,zoomMiddleBounds,zoomCompleteBounds})}`);
+    assert.notDeepEqual(arrival.camera, travel.camera, 'the camera reaches the Earth-facing arrival pose at .922');
+    assert.equal(zoomComplete.returnPhases.earthZoomEnd, .93);
     const returned = await setStageProgress(page, .94);
     assert.ok(returned.sunOpacity < .001, 'Sun is faded by the end of the return interval');
-    assert.equal(returned.sunReveal, 0, 'molten detail is hidden after the return');
+    assert.equal(returned.phase, 'city', 'the established Contact/city scene starts at .94');
     assert.deepEqual(await readCatalogVisibility(page), {opacity:0, inert:true, ariaHidden:'true'}, 'catalog is hidden after the return completes');
+
+    const reverseZoom = await setStageProgress(page, .926);
+    const reverseTravel = await setStageProgress(page, .916);
+    const reverseFade = await setStageProgress(page, .905);
+    assert.deepEqual(reverseZoom.camera, zoomMiddle.camera, 'reverse scrubbing returns to the same zoom pose');
+    assert.deepEqual(reverseTravel.camera, travel.camera, 'reverse scrubbing returns to the same travel pose');
+    assert.deepEqual(reverseFade.camera, fadeMiddle.camera, 'reverse scrubbing holds the catalog composition during fade');
+    assert.ok(Math.abs((await readCatalogVisibility(page)).opacity - .5) < .001, 'catalog fade reverses with scroll progress');
+
+    await setStageProgress(page, .86);
+    await previous.click();
+    assert.equal(await page.evaluate(() => document.activeElement.matches(':focus-visible')), false, 'pointer focus is not keyboard-visible');
+    await setStageProgress(page, .905);
+    assert.ok((await readCatalogVisibility(page)).opacity < .55, 'pointer focus does not pin the catalog while it fades');
+    await setStageProgress(page, .91);
+    assert.equal((await readCatalogVisibility(page)).inert, true, 'pointer-focused catalog becomes inert when its fade completes');
+    await setStageProgress(page, .86);
+    await next.click();
+    assert.equal(await page.locator('#project-catalog-page-status').innerText(), 'Page 4 of 4; projects 13 through 13 of 13');
 
     const beforeLocal = await setStageProgress(page, .86);
     const beforeTrackHeight = await page.locator('#journey-track').evaluate(track => track.offsetHeight);
@@ -465,8 +505,7 @@ try {
     assert.deepEqual(afterPageBounds, catalogBounds, 'catalog paging leaves the projected Sun framing unchanged');
     assert.deepEqual(afterPageChange.solarScale, beforeLocal.solarScale, 'catalog paging does not scale the Sun');
     assert.equal(afterPageChange.sunOpacity, beforeLocal.sunOpacity, 'catalog paging does not fade the Sun');
-    assert.equal(afterPageChange.shaderOpacity, beforeLocal.shaderOpacity, 'catalog paging does not fade the Sun shader');
-    assert.equal(afterPageChange.sunReveal, beforeLocal.sunReveal, 'catalog paging does not change the shader reveal');
+    assert.equal(afterPageChange.sunMaterialColor, beforeLocal.sunMaterialColor, 'catalog paging does not change the flat Sun color');
 
     await page.evaluate(() => {
       const content = document.querySelector('#project-catalog-grid .project-card-content');
@@ -490,8 +529,7 @@ try {
     assert.deepEqual(afterResizeBounds, catalogBounds, 'content and media remeasurement leaves the projected Sun framing unchanged');
     assert.deepEqual(afterResize.solarScale, beforeLocal.solarScale, 'content and media resize does not scale the Sun');
     assert.equal(afterResize.sunOpacity, beforeLocal.sunOpacity, 'content and media resize does not fade the Sun');
-    assert.equal(afterResize.shaderOpacity, beforeLocal.shaderOpacity, 'content and media resize does not fade the Sun shader');
-    assert.equal(afterResize.sunReveal, beforeLocal.sunReveal, 'content and media resize does not change the shader reveal');
+    assert.equal(afterResize.sunMaterialColor, beforeLocal.sunMaterialColor, 'content and media resize does not change the flat Sun color');
     await next.click();
 
     const columns = await page.evaluate(() => getComputedStyle(document.querySelector('#project-catalog-grid')).gridTemplateColumns.split(' ').length);
@@ -535,6 +573,15 @@ try {
       assert.ok(sun.right + 12 < viewport.width * .51,
         `split-layout Sun clears the right catalog: ${JSON.stringify(sun)}`);
     }
+    const arrivalBounds = await projectedEarthBounds(page, .922);
+    const zoomMiddleBounds = await projectedEarthBounds(page, .926);
+    const zoomEndBounds = await projectedEarthBounds(page, .93);
+    assertEarthInFrame(arrivalBounds, viewport.width, viewport.height, `${viewport.width}px Earth arrival`);
+    assertEarthInFrame(zoomMiddleBounds, viewport.width, viewport.height, `${viewport.width}px Earth mid-zoom`);
+    assertEarthInFrame(zoomEndBounds, viewport.width, viewport.height, `${viewport.width}px Earth zoom completion`);
+    assert.ok(arrivalBounds.width < zoomMiddleBounds.width && zoomMiddleBounds.width < zoomEndBounds.width,
+      `${viewport.width}px Earth visibly grows through zoom: ${JSON.stringify({arrivalBounds,zoomMiddleBounds,zoomEndBounds})}`);
+    await setStageProgress(page, .535);
     if (viewport.width === 844) {
       for (const action of await page.locator('#project-catalog-grid .project-card-action').all()) {
         await action.focus();
@@ -554,44 +601,44 @@ try {
   }
 
   {
-    const {page, errors} = await openScenario({count:1, orbitCount:1});
+    const {page, errors} = await openScenario({count:5, orbitCount:1});
     await page.emulateMedia({reducedMotion:'reduce'});
-    await page.waitForFunction(() => window.__journeyScene.getDebugState().reducedMotion
-      && window.__journeyScene.getDebugState().paused);
+    await page.evaluate(() => window.__journeyScene.setReducedMotion(true));
+    await page.waitForFunction(() => window.__journeyScene.getDebugState().reducedMotion);
+    await page.locator('#project-catalog-next').focus();
+    await page.keyboard.press('Tab');
+    const focusedCatalog = await page.evaluate(() => ({
+      insideCatalog:document.querySelector('#projects').contains(document.activeElement),
+      focusVisible:document.activeElement.matches(':focus-visible'),
+    }));
+    assert.deepEqual(focusedCatalog, {insideCatalog:true, focusVisible:true}, 'reduced-motion keyboard focus remains in the static catalog before return');
+    const reducedScrollBeforeSnap = await page.evaluate(() => scrollY);
     await page.evaluate(() => {
       const scene = window.__journeyScene;
       document.body.classList.remove('is-reading');
       document.body.classList.add('has-journey');
       scene.setPaused(false);
-      scene.setProgress(scene.projectLayout.projectsStageStart, true);
-      scene.frame(performance.now());
     });
-    const first = await page.evaluate(() => ({
-      reducedMotion:window.__journeyScene.getDebugState().reducedMotion,
-      running:window.__journeyScene.getDebugState().animationRunning,
-      time:window.__journeyScene.solarSunMaterial.uniforms.uTime.value,
-      reveal:window.__journeyScene.solarSunMaterial.uniforms.uReveal.value,
-      target:window.__journeyScene.targetProgress,
-      stageStart:window.__journeyScene.projectLayout.projectsStageStart,
-      solarReveal:window.__journeyScene.solarReveal,
-      paused:window.__journeyScene.getDebugState().paused,
-    }));
-    await page.waitForTimeout(120);
-    const second = await page.evaluate(() => window.__journeyScene.solarSunMaterial.uniforms.uTime.value);
-    assert.equal(first.reducedMotion, true);
-    assert.equal(first.running, false);
-    assert.equal(first.paused, false, 'the browser scene is unpaused for the reduced-motion stage check');
-    assert.equal(first.time, 0);
-    assert.equal(first.reveal, 1, `reduced motion still uses the reached catalog stage to reveal static molten detail: ${JSON.stringify(first)}`);
-    assert.equal(second, first.time, 'the procedural Sun shader remains frozen under reduced motion');
-    const bounds = await projectedSunBounds(page, .83);
-    const redCoverage = measureSunRedCoverage(await page.locator('.journey-canvas').screenshot(), bounds);
-    assert.ok(redCoverage.diskPixels > 1000, `the browser screenshot contains the visible Sun disk: ${JSON.stringify(redCoverage)}`);
-    assert.ok(redCoverage.coverage >= .02 && redCoverage.coverage < .04,
-      `reduced-motion red accents remain visible and under 4% of the Sun disk: ${JSON.stringify(redCoverage)}`);
-    assert.deepEqual(errors, [], 'the procedural Sun shader compiles without browser errors');
+    const reducedStart = await setStageProgress(page, .90);
+    const reducedArrival = await setStageProgress(page, .922);
+    const reducedZoomEnd = await setStageProgress(page, .93);
+    assert.equal(reducedStart.reducedMotion, true);
+    assert.equal(reducedStart.animationRunning, false);
+    assert.equal(reducedStart.sunMaterialType, 'MeshBasicMaterial');
+    assert.equal(reducedStart.sunHasUniforms, false);
+    assert.deepEqual(reducedArrival.camera, reducedStart.camera, 'reduced motion holds the catalog camera through Earth arrival');
+    assert.deepEqual(reducedZoomEnd.camera, reducedStart.camera, 'reduced motion does not animate the Earth zoom');
+    assert.deepEqual(await readCatalogVisibility(page), {opacity:1, inert:false, ariaHidden:'false'}, 'reduced motion keeps the complete catalog static before .94');
+    const reducedBeforeSnap = await setStageProgress(page, .939);
+    assert.deepEqual(reducedBeforeSnap.camera, reducedStart.camera, 'reduced-motion camera remains static through .939');
+    const reducedContact = await setStageProgress(page, .94);
+    assert.equal(reducedContact.phase, 'city', 'reduced motion snaps to the Contact/city pose at .94');
+    assert.notDeepEqual(reducedContact.camera, reducedStart.camera, 'the Contact/city pose is reached by a snap, not animated travel');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'scroll-cue', 'reduced-motion focus transfers immediately before the .94 snap');
+    assert.equal(await page.evaluate(() => scrollY), reducedScrollBeforeSnap, 'reduced-motion focus transfer does not change scroll position');
+    assert.deepEqual(errors, []);
     await page.close();
-    console.log(`PASS reduced motion freezes shader time; red accents cover ${(redCoverage.coverage * 100).toFixed(2)}% of ${redCoverage.diskPixels} Sun pixels`);
+    console.log('PASS reduced motion holds the catalog camera until .94, then snaps to the city with focus preserved');
   }
 } finally {
   await browser.close();

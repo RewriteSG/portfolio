@@ -13,6 +13,9 @@ for (const count of [0, 1, 3, 8, 64]) {
     assert.equal(layout.projectsStageStart, count ? .83 : .535);
     assert.equal(layout.projectsStageEnd, .90);
     assert.equal(layout.returnStart, .90);
+    assert.equal(layout.catalogFadeEnd, .91);
+    assert.equal(layout.earthArrival, .922);
+    assert.equal(layout.earthZoomEnd, .93);
     assert.equal(layout.returnEnd, .94);
     assert.equal(layout.projectsStageEnd, layout.returnStart, 'the catalog stage ends exactly where the return starts');
     assert.ok(layout.returnEnd > layout.returnStart, 'the return has a nonempty interval');

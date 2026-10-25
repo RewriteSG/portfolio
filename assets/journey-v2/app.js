@@ -461,8 +461,14 @@ function updateOrbit(p) {
 }
 
 function updatePresentation(progress) {
-  if (isReading || failed) return;
   const p = clamp(progress);
+  const reducedMotion = prefersReducedMotion();
+  const inProjects = p >= .48 && p < projectLayout.projectsStageEnd;
+  body.classList.toggle('is-projects', inProjects);
+  const projectPanel = panels.find(panel => panel.id === 'projects');
+  const focusHandoff = reducedMotion ? projectLayout.returnEnd : projectLayout.returnStart;
+  if (p >= focusHandoff && projectPanel && hasKeyboardFocusWithin(projectPanel)) scrollCue.focus({preventScroll:true});
+  if (isReading || failed) return;
   updateOrbit(p);
   const projectEntry = projectLayout.projectsStageStart - PROJECT_ENTRY_MARGIN;
   const crossedProjectEntry = (previousProgress < projectEntry && p >= projectEntry)
@@ -478,7 +484,8 @@ function updatePresentation(progress) {
     const fade = panelFade(panel);
     const entry = panel.id === 'projects' ? (p >= start - PROJECT_ENTRY_MARGIN ? 1 : 0) : start === 0 ? 1 : smooth((p - start) / fade);
     const exit = panel.id === 'projects'
-      ? 1 - smooth((p - projectLayout.returnStart) / (projectLayout.returnEnd - projectLayout.returnStart))
+      ? reducedMotion ? Number(p < projectLayout.returnEnd)
+        : 1 - smooth((p - projectLayout.returnStart) / (projectLayout.catalogFadeEnd - projectLayout.returnStart))
       : end === 1 ? 1 : 1 - smooth((p - (end - fade)) / fade);
     const opacity = entry * exit;
     const keyboardFocused = hasKeyboardFocusWithin(panel);
@@ -486,7 +493,7 @@ function updatePresentation(progress) {
     const visible = opacity > .006 || focused;
     panel.classList.toggle('is-active', visible);
     panel.style.opacity = focused ? '1' : opacity.toFixed(4);
-    panel.style.transform = focused || prefersReducedMotion() ? 'none' : `translateY(${((1 - opacity) * (p < start + fade ? 10 : -8)).toFixed(2)}px)`;
+    panel.style.transform = focused || reducedMotion ? 'none' : `translateY(${((1 - opacity) * (p < start + fade ? 10 : -8)).toFixed(2)}px)`;
     panel.inert = !focused && opacity < .35;
     panel.setAttribute('aria-hidden', String((!focused && opacity < .35) || !panel.id));
     if (panel.id && opacity > highestOpacity) { active = panel.id; highestOpacity = opacity; }
@@ -506,9 +513,7 @@ function updatePresentation(progress) {
   }
 
   progressFill.style.transform = `scaleX(${p.toFixed(5)})`;
-  const inProjects = p >= .48 && p < .90;
-  body.classList.toggle('is-projects', inProjects);
-  body.classList.toggle('is-contact', p >= .94);
+  body.classList.toggle('is-contact', p >= projectLayout.returnEnd);
   const shade = p < .15 ? .08 : p < .48 ? .65 : p < .90 ? .08 : p < .94 ? .25 : 0;
   body.style.setProperty('--shade', shade);
 
