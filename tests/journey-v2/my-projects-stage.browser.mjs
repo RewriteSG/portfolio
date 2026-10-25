@@ -56,6 +56,9 @@ function readStageState(page) {
       sunHasUniforms:Boolean(scene.solarSun.material.uniforms),
       haloColor:scene.solar.children.find(child => child.isSprite && child.material.color.getHex() === 0xffcf88)?.material.color.getHex() ?? null,
       cloudMaterialType:scene.cloudMaterial.type,
+      cloudCover:state.cloudCover,
+      cityVisible:state.cityVisible,
+      earthVisible:state.earthVisible,
       returnPhases:{
         returnStart:scene.projectLayout.returnStart,
         catalogFadeEnd:scene.projectLayout.catalogFadeEnd,
@@ -289,8 +292,8 @@ try {
     assert.ok(Math.abs(zeroOrbitStage.progress - .535) < .0001, `zero-orbit catalog starts at .535, received ${zeroOrbitStage.progress}`);
     assert.ok(zeroOrbitSpans.catalog >= 1.5 * zeroOrbitSpans.height - 1e-7,
       `zero-orbit catalog handoff retains its 1.5× floor: ${JSON.stringify(zeroOrbitSpans)}`);
-    assert.ok(zeroOrbitSpans.return >= 4.5 * zeroOrbitSpans.height - 1e-7,
-      `zero-orbit return has the 4.5× floor: ${JSON.stringify(zeroOrbitSpans)}`);
+    assert.ok(zeroOrbitSpans.return >= 9 * zeroOrbitSpans.height - 1e-7,
+      `zero-orbit return has the 9× floor: ${JSON.stringify(zeroOrbitSpans)}`);
     assert.ok(await page.evaluate(() => Boolean(document.querySelector('#project-mount').compareDocumentPosition(document.querySelector('#projects')) & Node.DOCUMENT_POSITION_FOLLOWING)), 'the orbit mount precedes the catalog stage in DOM order');
     assert.deepEqual(errors, []);
     console.log('PASS empty catalog starts at .535 after solar intro and hides pagination');
@@ -397,6 +400,37 @@ try {
       `zero-orbit Earth grows during the distinct zoom: ${JSON.stringify({zeroArrivalBounds,zeroZoomMiddleBounds,zeroZoomEndBounds})}`);
     assert.equal(zeroZoomEnd.returnPhases.earthZoomEnd, .93);
     assert.equal(zeroZoomEnd.returnPhases.earthZoomStart, .926);
+
+    const cloudCheckpoints = [.90, .922, .924, .925, .926, .928, .93, .938, .94, .958, .976];
+    const forwardCloudStates = new Map();
+    for (const progress of cloudCheckpoints) forwardCloudStates.set(progress, await setStageProgress(page, progress));
+    for (const progress of [.90, .922, .924, .925, .926]) {
+      assert.equal(forwardCloudStates.get(progress).cloudCover, 0, `cloud cover remains absent through ${progress}`);
+    }
+    assert.ok(Math.abs(forwardCloudStates.get(.928).cloudCover - .5) < .001,
+      'cloud cover follows the midpoint of the Earth zoom at .928');
+    for (const progress of [.93, .938, .94]) {
+      assert.ok(Math.abs(forwardCloudStates.get(progress).cloudCover - 1) < .001,
+        `cloud cover is full at ${progress}`);
+    }
+    assert.equal(forwardCloudStates.get(.938).earthVisible, true, 'Earth remains the visible scene through the covered hold');
+    assert.equal(forwardCloudStates.get(.938).cityVisible, false, 'city remains hidden until the covered .94 arrival');
+    assert.equal(forwardCloudStates.get(.94).phase, 'city', 'Contact/city starts at .94 under full cloud cover');
+    assert.equal(forwardCloudStates.get(.94).earthVisible, false, 'Earth leaves the scene at the .94 Contact/city boundary');
+    assert.equal(forwardCloudStates.get(.94).cityVisible, true, 'city is ready beneath the cloud veil at .94');
+    assert.ok(Math.abs(forwardCloudStates.get(.958).cloudCover - .5) < .001,
+      'the existing city reveal fade reaches its midpoint at .958');
+    await setStageProgress(page, .958);
+    const contactOpacity = await page.locator('#contact').evaluate(node => Number(getComputedStyle(node).opacity));
+    assert.ok(contactOpacity > .5, `Contact remains legible above the cloud fade at .958: ${contactOpacity}`);
+    assert.equal(forwardCloudStates.get(.976).cloudCover, 0, 'cloud cover clears by .976');
+    for (const progress of [...cloudCheckpoints].reverse()) {
+      const reverse = await setStageProgress(page, progress);
+      assert.equal(reverse.cloudCover, forwardCloudStates.get(progress).cloudCover,
+        `reverse scrub restores the same cloud cover at ${progress}`);
+      assert.deepEqual(reverse.camera, forwardCloudStates.get(progress).camera,
+        `reverse scrub restores the same camera pose at ${progress}`);
+    }
     const zeroReverseTravel = await setStageProgress(page, .916);
     const zeroReverseFade = await setStageProgress(page, .905);
     assert.notDeepEqual(zeroReverseTravel.camera, zeroZoomMiddle.camera, 'zero-orbit camera scrubs back from zoom toward catalog');
@@ -416,15 +450,15 @@ try {
     assert.ok(Math.abs(directStage.progress - .83) < .0001, `direct #projects hash starts after the featured orbit at .83, received ${directStage.progress}`);
     assert.ok(orbitSpans.catalog >= 1.5 * orbitSpans.height - 1e-7,
       `orbit catalog handoff retains its 1.5× floor: ${JSON.stringify(orbitSpans)}`);
-    assert.ok(orbitSpans.return >= 4.5 * orbitSpans.height - 1e-7,
-      `orbit return has the 4.5× floor: ${JSON.stringify(orbitSpans)}`);
+    assert.ok(orbitSpans.return >= 9 * orbitSpans.height - 1e-7,
+      `orbit return has the 9× floor: ${JSON.stringify(orbitSpans)}`);
     const floorBindingSpans = await readCameraScrollSpans(page, {floorBinding:true});
-    assert.ok(Math.abs(floorBindingSpans.return - 4.5 * floorBindingSpans.height) < 1e-7,
-      `floor-binding return span is exactly 4.5× viewport height: ${JSON.stringify(floorBindingSpans)}`);
-    assert.ok(Math.abs(floorBindingSpans.earthHold - .45 * floorBindingSpans.height) < 1e-7,
-      `floor-binding Earth hold spans .45× viewport height: ${JSON.stringify(floorBindingSpans)}`);
-    assert.ok(Math.abs(floorBindingSpans.earthZoom - .45 * floorBindingSpans.height) < 1e-7,
-      `floor-binding Earth zoom spans .45× viewport height: ${JSON.stringify(floorBindingSpans)}`);
+    assert.ok(Math.abs(floorBindingSpans.return - 9 * floorBindingSpans.height) < 1e-7,
+      `floor-binding return span is exactly 9× viewport height: ${JSON.stringify(floorBindingSpans)}`);
+    assert.ok(Math.abs(floorBindingSpans.earthHold - .9 * floorBindingSpans.height) < 1e-7,
+      `floor-binding Earth hold spans .9× viewport height: ${JSON.stringify(floorBindingSpans)}`);
+    assert.ok(Math.abs(floorBindingSpans.earthZoom - .9 * floorBindingSpans.height) < 1e-7,
+      `floor-binding Earth zoom spans .9× viewport height: ${JSON.stringify(floorBindingSpans)}`);
     assert.equal(directStage.sunMaterialType, 'MeshBasicMaterial', 'direct catalog entry uses a flat Sun surface');
     assert.equal(directStage.sunMaterialColor, 0xffd8a0);
     const directSunBounds = await projectedSunBounds(page, .83);
@@ -746,6 +780,20 @@ try {
     assertEarthInFrame(zoomEndBounds, viewport.width, viewport.height, `${viewport.width}px Earth zoom completion`);
     assert.ok(arrivalBounds.width < zoomMiddleBounds.width && zoomMiddleBounds.width < zoomEndBounds.width,
       `${viewport.width}px Earth visibly grows through zoom: ${JSON.stringify({arrivalBounds,zoomMiddleBounds,zoomEndBounds})}`);
+    const zoomState = await setStageProgress(page, .928);
+    assert.ok(Math.abs(zoomState.cloudCover - .5) < .001,
+      `${viewport.width}px cloud cover stays synchronized with the zoom at .928`);
+    if (viewport.width === 390) {
+      await page.setViewportSize({width:412,height:844});
+      await page.waitForFunction(() => Math.abs(window.__journeyScene.getDebugState().targetProgress - .928) < .001
+        && Math.abs(window.__journeyScene.getDebugState().cloudCover - .5) < .001);
+      const afterViewportResize = await readStageState(page);
+      assert.ok(Math.abs(afterViewportResize.progress - zoomState.progress) < .001,
+        'mobile viewport resize preserves normalized Earth-zoom progress');
+      assert.ok(Math.abs(afterViewportResize.cloudCover - zoomState.cloudCover) < .001,
+        'mobile viewport resize preserves synchronized cloud cover');
+      await page.setViewportSize(viewport);
+    }
     await setStageProgress(page, .535);
     if (viewport.width === 667) {
       const asyncFocusAndCheck = async (locator, label) => {
@@ -863,12 +911,17 @@ try {
     assert.equal(reducedStart.sunHasUniforms, false);
     assert.deepEqual(reducedArrival.camera, reducedStart.camera, 'reduced motion holds the catalog camera through Earth arrival');
     assert.deepEqual(reducedZoomEnd.camera, reducedStart.camera, 'reduced motion does not animate the Earth zoom');
+    assert.equal(reducedStart.cloudCover, 0, 'reduced motion starts with the veil hidden');
+    assert.equal(reducedArrival.cloudCover, 0, 'reduced motion keeps the veil hidden through arrival');
+    assert.equal(reducedZoomEnd.cloudCover, 0, 'reduced motion does not animate the veil with the zoom');
     assert.deepEqual(await readCatalogVisibility(page), {opacity:1, inert:false, ariaHidden:'false'}, 'reduced motion keeps the complete catalog static before .94');
     const reducedBeforeSnap = await setStageProgress(page, .939);
     assert.deepEqual(reducedBeforeSnap.camera, reducedStart.camera, 'reduced-motion camera remains static through .939');
+    assert.equal(reducedBeforeSnap.cloudCover, 0, 'reduced-motion veil remains hidden through .939');
     const reducedContact = await setStageProgress(page, .94);
     assert.equal(reducedContact.phase, 'city', 'reduced motion snaps to the Contact/city pose at .94');
     assert.notDeepEqual(reducedContact.camera, reducedStart.camera, 'the Contact/city pose is reached by a snap, not animated travel');
+    assert.equal(reducedContact.cloudCover, 0, 'reduced motion does not cover the snapped Contact/city scene');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'scroll-cue', 'reduced-motion focus transfers immediately before the .94 snap');
     assert.equal(await page.evaluate(() => scrollY), reducedScrollBeforeSnap, 'reduced-motion focus transfer does not change scroll position');
     assert.deepEqual(errors, []);

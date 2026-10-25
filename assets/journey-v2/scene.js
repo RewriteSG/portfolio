@@ -623,7 +623,8 @@ export class JourneyScene {
     this.scene.background.set(0x050711).lerp(new THREE.Color(0xbccfcf), cityBlend);
     this.distantStars.visible = cityBlend < .999;
     this.distantStars.material.opacity = .66 * (1 - cityBlend);
-    this.cloudCover = smooth(this.projectLayout.returnStart, this.projectLayout.returnEnd, p) * (1 - smooth(this.projectLayout.returnEnd, .976, p));
+    this.cloudCover = smooth(this.projectLayout.earthZoomStart, this.projectLayout.earthZoomEnd, p)
+      * (1 - smooth(this.projectLayout.returnEnd, .976, p));
     this.cloudPass.visible = this.cloudCover > .001;
     this.cloudMaterial.uniforms.uCover.value = this.cloudCover;
     this.cloudMaterial.uniforms.uTime.value = this.time;

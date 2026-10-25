@@ -61,12 +61,12 @@ for (const count of [0, 1, 3, 8, 64]) {
 
 for (const count of [0, 1, 3]) {
   for (const height of [390, 768, 900]) {
-    test(`${count} projects at ${height}px keep the catalog at 1.5× and return at 4.5× viewport height`, () => {
+    test(`${count} projects at ${height}px keep the catalog at 1.5× and return at 9× viewport height`, () => {
       const layout = buildProjectLayout(Array.from({length:count}, (_, i) => `handoff-${i}`));
       const panels = layout.intervals.map(interval => ({...interval, overflow:1400, minimumDuration:810}));
       const metrics = buildScrollMetrics(layout, height, panels);
       const catalogFloor = 1.5 * height;
-      const returnFloor = 4.5 * height;
+      const returnFloor = 9 * height;
       const span = (start, end) => scrollAtProgress(metrics, end) - scrollAtProgress(metrics, start);
 
       assert.equal(layout.catalogCameraStart, count ? .818 : .48);
@@ -75,10 +75,10 @@ for (const count of [0, 1, 3]) {
         `catalog camera span ${span(layout.catalogCameraStart, layout.projectsStageStart)} is below ${catalogFloor}`);
       assert.ok(span(layout.returnStart, layout.returnEnd) >= returnFloor - 1e-7,
         `return camera span ${span(layout.returnStart, layout.returnEnd)} is below ${returnFloor}`);
-      assert.ok(Math.abs(span(layout.earthArrival, layout.earthZoomStart) - .45 * height) < 1e-7,
-        `Earth hold span ${span(layout.earthArrival, layout.earthZoomStart)} should be .45× viewport height`);
-      assert.ok(Math.abs(span(layout.earthZoomStart, layout.earthZoomEnd) - .45 * height) < 1e-7,
-        `Earth zoom span ${span(layout.earthZoomStart, layout.earthZoomEnd)} should be .45× viewport height`);
+      assert.ok(Math.abs(span(layout.earthArrival, layout.earthZoomStart) - .9 * height) < 1e-7,
+        `Earth hold span ${span(layout.earthArrival, layout.earthZoomStart)} should be .9× viewport height`);
+      assert.ok(Math.abs(span(layout.earthZoomStart, layout.earthZoomEnd) - .9 * height) < 1e-7,
+        `Earth zoom span ${span(layout.earthZoomStart, layout.earthZoomEnd)} should be .9× viewport height`);
       for (const progress of [layout.catalogCameraStart, layout.projectsStageStart, .90, .91, .922, .926, .93, .94]) {
         assert.ok(Math.abs(progressAtScroll(metrics, scrollAtProgress(metrics, progress)) - progress) < 1e-12,
           `progress round-trips at ${progress}`);
@@ -122,7 +122,7 @@ test('catalog camera top-up composes with overlapping final orbit content by max
 
 test('return camera top-up composes below- and above-floor content by max, not addition', () => {
   const height = 900;
-  const floor = 4.5 * height;
+  const floor = 9 * height;
   const layout = buildProjectLayout(['first', 'second', 'last']);
   const start = layout.returnStart;
   const end = layout.returnEnd;
@@ -135,7 +135,7 @@ test('return camera top-up composes below- and above-floor content by max, not a
     const finalDistance = scrollAtProgress(metrics, end) - scrollAtProgress(metrics, start);
 
     assert.equal(contentOnlyDistance < floor, overflow === floor / 2,
-      'fixture exercises both sides of the 4.5× floor');
+      'fixture exercises both sides of the 9× floor');
     assert.ok(Math.abs(finalDistance - Math.max(contentOnlyDistance, floor)) < 1e-7,
       `final span ${finalDistance} should equal max(${contentOnlyDistance}, ${floor})`);
     for (const progress of [start, .91, .922, .926, .93, end]) {

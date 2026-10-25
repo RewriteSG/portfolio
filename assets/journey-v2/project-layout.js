@@ -109,7 +109,7 @@ export function buildScrollMetrics(layout, viewportHeight, panelMetrics = []) {
 
   let metrics = buildSegments(baseline, demands);
   const catalogCameraFloor = 1.5 * height;
-  const returnCameraFloor = 4.5 * height;
+  const returnCameraFloor = 9 * height;
   const intervals = [
     {start:layout?.catalogCameraStart, end:layout?.projectsStageStart, floor:catalogCameraFloor},
     {start:layout?.returnStart, end:layout?.returnEnd, floor:returnCameraFloor},
