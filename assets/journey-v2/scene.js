@@ -617,7 +617,7 @@ export class JourneyScene {
       halo.material.opacity = solarOpacity * (index === selectedIndex ? .55 : .2);
       planet.material.emissiveIntensity = index === selectedIndex ? .9 : .6;
     });
-    this.city.group.visible = p > this.projectLayout.returnEnd - .002;
+    this.city.group.visible = p >= this.projectLayout.cloudRevealEnd;
     if (this.city.group.visible) this.city.update(this.time, this.reducedMotion);
     const backgroundBlend = smooth(this.projectLayout.earthArrival, this.projectLayout.earthZoomStart, p);
     const cloudReveal = smooth(this.projectLayout.cloudRevealStart, this.projectLayout.cloudRevealEnd, p);
@@ -625,8 +625,11 @@ export class JourneyScene {
     const starFade = smooth(this.projectLayout.returnStart, this.projectLayout.returnEnd, p);
     this.distantStars.visible = starFade < .999;
     this.distantStars.material.opacity = .66 * (1 - starFade);
-    this.cloudCover = cloudReveal
-      * (1 - smooth(this.projectLayout.returnEnd, .976, p));
+    const cloudCityReveal = this.projectLayout.cloudCityReveal;
+    const cloudOut = p <= cloudCityReveal
+      ? 1 - .5 * smooth(this.projectLayout.earthZoomEnd, cloudCityReveal, p)
+      : .5 * (1 - smooth(cloudCityReveal, this.projectLayout.cloudFadeEnd, p));
+    this.cloudCover = cloudReveal * cloudOut;
     this.cloudPass.visible = this.cloudCover > .001;
     this.cloudMaterial.uniforms.uCover.value = this.cloudCover;
     this.cloudMaterial.uniforms.uTime.value = this.time;

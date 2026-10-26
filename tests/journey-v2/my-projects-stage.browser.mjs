@@ -70,6 +70,8 @@ function readStageState(page) {
         earthArrival:scene.projectLayout.earthArrival,
         cloudRevealStart:scene.projectLayout.cloudRevealStart,
         cloudRevealEnd:scene.projectLayout.cloudRevealEnd,
+        cloudFadeStart:scene.projectLayout.cloudFadeStart,
+        cloudFadeEnd:scene.projectLayout.cloudFadeEnd,
         earthZoomStart:scene.projectLayout.earthZoomStart,
         earthZoomEnd:scene.projectLayout.earthZoomEnd,
         returnEnd:scene.projectLayout.returnEnd,
@@ -155,6 +157,17 @@ function expectedDistantStarOpacity(progress) {
   const t = Math.max(0, Math.min(1, (progress - .90) / (.94 - .90)));
   const cityBlend = t * t * (3 - 2 * t);
   return .66 * (1 - cityBlend);
+}
+
+function expectedCloudCover(progress) {
+  const smooth = (start, end, value) => {
+    const t = Math.max(0, Math.min(1, (value - start) / (end - start)));
+    return t * t * (3 - 2 * t);
+  };
+  const cover = progress <= .938
+    ? 1 - .5 * smooth(.93, .938, progress)
+    : .5 * (1 - smooth(.938, .962, progress));
+  return smooth(.922, .926, progress) * cover;
 }
 
 function assertColorClose(actual, expected, label, tolerance = .000001) {
@@ -243,7 +256,7 @@ async function waitForStableSceneAndRoot(page) {
   }));
 }
 
-async function setRootScrollProgress(page, progress, rounding = 'ceil') {
+async function setRootScrollProgress(page, progress, rounding = 'ceil', allowRemap = false) {
   const input = await page.evaluate(() => {
     const scene = window.__journeyScene;
     const height = innerHeight;
@@ -280,22 +293,22 @@ async function setRootScrollProgress(page, progress, rounding = 'ceil') {
   await page.waitForFunction(expectedTop => Math.round(scrollY) === expectedTop, scrollTop);
   // Headless Chromium may move to the instant root offset without notifying the app listener.
   await page.evaluate(() => dispatchEvent(new Event('scroll')));
-  await page.waitForFunction(expected => {
+  await page.waitForFunction(({expected,desired,allowRemap}) => {
     const state = window.__journeyScene.getDebugState();
-    return Math.abs(state.targetProgress - expected) < .0000001
+    return (allowRemap ? Math.abs(state.targetProgress - desired) < .001 : Math.abs(state.targetProgress - expected) < .0000001)
       && Math.abs(state.progress - state.targetProgress) < .00000001;
-  }, expectedProgress);
-  return page.evaluate(expected => {
+  }, {expected:expectedProgress,desired:progress,allowRemap});
+  return page.evaluate(({expected,allowRemap}) => {
     const state = window.__journeyScene.getDebugState();
     return {
       scrollY,
-      expectedProgress:expected,
+      expectedProgress:allowRemap ? state.targetProgress : expected,
       targetProgress:state.targetProgress,
       renderedProgress:state.progress,
       returnInk:document.body.classList.contains('is-return-city-ink'),
       contact:document.body.classList.contains('is-contact'),
     };
-  }, expectedProgress);
+  }, {expected:expectedProgress,allowRemap});
 }
 
 function projectedSolarBounds(page, progress = .86) {
@@ -481,6 +494,7 @@ try {
     assert.deepEqual(stageEntry.returnPhases, {
       returnStart:.90, catalogFadeEnd:.91, earthArrival:.922,
       cloudRevealStart:.922, cloudRevealEnd:.926,
+      cloudFadeStart:.926, cloudFadeEnd:.962,
       earthZoomStart:.926, earthZoomEnd:.93, returnEnd:.94,
     });
     assert.deepEqual({
@@ -567,7 +581,7 @@ try {
     assert.equal(zeroZoomEnd.returnPhases.earthZoomEnd, .93);
     assert.equal(zeroZoomEnd.returnPhases.earthZoomStart, .926);
 
-    const cloudCheckpoints = [.90, .921999, .922, .924, .925, .926, .928, .93, .938, .94, .958, .976];
+    const cloudCheckpoints = [.90, .921999, .922, .924, .925, .925999, .926, .928, .93, .934, .938, .9399, .94, .944, .95, .958, .962, .976];
     const forwardCloudStates = new Map();
     for (const progress of cloudCheckpoints) forwardCloudStates.set(progress, await setStageProgress(page, progress));
     for (const progress of [.90, .921999, .922]) {
@@ -586,32 +600,54 @@ try {
       'cloud cover is halfway revealed with the backdrop blend at .924');
     assert.ok(Math.abs(forwardCloudStates.get(.926).cloudCover - 1) < .001,
       'cloud cover reaches full at the Earth zoom start .926');
-    for (const progress of [.926, .928, .93, .938, .94]) {
-      assert.ok(Math.abs(forwardCloudStates.get(progress).cloudCover - 1) < .001,
-        `cloud cover is full at ${progress}`);
+    for (const progress of cloudCheckpoints) {
+      assert.ok(Math.abs(forwardCloudStates.get(progress).cloudCover - expectedCloudCover(progress)) < .001,
+        `cloud cover follows the .926–.962 fade at ${progress}`);
     }
-    for (const progress of [.926, .928, .93, .938, .94, .958, .976]) {
+    for (const progress of [.926, .928, .93, .934, .938, .9399, .94, .944, .95, .958, .962, .976]) {
       assert.equal(forwardCloudStates.get(progress).backgroundHex, 0xbccfcf,
-        `city backdrop stays exact through the cloud hold/fade at ${progress}`);
+        `city backdrop stays exact through the cloud fade at ${progress}`);
     }
     for (const progress of cloudCheckpoints) {
       const state = forwardCloudStates.get(progress);
       assert.ok(Math.abs(state.distantStarOpacity - expectedDistantStarOpacity(progress)) < .000001,
         `distant stars retain their independent .90–.94 fade at ${progress}`);
-      assert.equal(state.distantStarsVisible, progress < .94,
-        `distant-star visibility retains its .94 boundary at ${progress}`);
+      assert.equal(state.distantStarsVisible, expectedDistantStarOpacity(progress) > .00066,
+        `distant-star render visibility follows its unchanged near-zero opacity cutoff at ${progress}`);
     }
-    assert.equal(forwardCloudStates.get(.938).earthVisible, true, 'Earth remains the visible scene through the covered hold');
-    assert.equal(forwardCloudStates.get(.938).cityVisible, false, 'city remains hidden until the covered .94 arrival');
-    assert.equal(forwardCloudStates.get(.94).phase, 'city', 'Contact/city starts at .94 under full cloud cover');
+    assert.equal(forwardCloudStates.get(.925999).cityVisible, false, 'city remains hidden immediately below .926');
+    assert.equal(forwardCloudStates.get(.926).cityVisible, true, 'city visibility opens inclusively at .926 behind full cover');
+    assert.equal(forwardCloudStates.get(.93).cityVisible, true, 'city remains ready behind the veil when zoom ends');
+    assert.equal(forwardCloudStates.get(.934).cityVisible, true, 'city remains ready as the first gaps may begin');
+    assert.equal(forwardCloudStates.get(.938).earthVisible, true, 'Earth remains visible during the pre-Contact city reveal');
+    assert.equal(forwardCloudStates.get(.938).cityVisible, true, 'city is available as clouds begin to reveal it before Contact');
+    assert.equal(forwardCloudStates.get(.9399).earthVisible, true, 'Earth remains visible immediately before Contact');
+    assert.equal(forwardCloudStates.get(.94).phase, 'city', 'Contact/city starts at .94 while clouds continue clearing');
     assert.equal(forwardCloudStates.get(.94).earthVisible, false, 'Earth leaves the scene at the .94 Contact/city boundary');
-    assert.equal(forwardCloudStates.get(.94).cityVisible, true, 'city is ready beneath the cloud veil at .94');
-    assert.ok(Math.abs(forwardCloudStates.get(.958).cloudCover - .5) < .001,
-      'the existing city reveal fade reaches its midpoint at .958');
-    await setStageProgress(page, .958);
+    assert.equal(forwardCloudStates.get(.94).cityVisible, true, 'city remains visible at the Contact boundary');
+    for (const [progress, cover] of [[.926, 1], [.928, 1], [.93, 1], [.934, .75], [.938, .5], [.94, .490162], [.944, .421875], [.95, .25], [.962, 0], [.976, 0]]) {
+      assert.ok(Math.abs(forwardCloudStates.get(progress).cloudCover - cover) < .001,
+        `cloud cover reaches ${cover} at ${progress}`);
+    }
+    assert.equal(forwardCloudStates.get(.962).cloudCover, 0, 'cloud cover clears at .962');
+    assert.equal(forwardCloudStates.get(.962).cityVisible, true, 'city remains visible when the cloud fade ends');
+    assert.equal(forwardCloudStates.get(.976).cloudCover, 0, 'cloud remains clear after .962');
+    await setStageProgress(page, .944);
+    const contactAtCloudMidpoint = await readReturnInkState(page);
     const contactOpacity = await page.locator('#contact').evaluate(node => Number(getComputedStyle(node).opacity));
-    assert.ok(contactOpacity > .5, `Contact remains legible above the cloud fade at .958: ${contactOpacity}`);
-    assert.equal(forwardCloudStates.get(.976).cloudCover, 0, 'cloud cover clears by .976');
+    const contactReadability = await page.locator('.contact-copy').evaluate(node => ({
+      color:getComputedStyle(node.querySelector('h2')).color,
+      intro:getComputedStyle(node.querySelector('.contact-intro')).color,
+      email:getComputedStyle(node.querySelector('.contact-email')).color,
+      surface:getComputedStyle(node,'::before').backgroundImage,
+    }));
+    assert.equal(contactAtCloudMidpoint.contact, true, 'Contact styling remains active during the post-boundary cloud fade');
+    assert.equal(contactAtCloudMidpoint.active, false, 'temporary city ink ends at Contact while clouds continue clearing');
+    assert.ok(contactOpacity > .15, `Contact copy has begun to appear at cloud midpoint .944: ${contactOpacity}`);
+    assert.deepEqual(contactReadability, {
+      color:'rgb(35, 65, 57)', intro:'rgb(61, 91, 80)', email:'rgb(35, 65, 57)',
+      surface:'linear-gradient(90deg, rgba(188, 207, 207, 0.98), rgba(188, 207, 207, 0.94) 85%, rgba(188, 207, 207, 0.88))',
+    }, 'Contact copy retains its readable city palette and surface while the veil clears');
     for (const progress of [...cloudCheckpoints].reverse()) {
       const reverse = await setStageProgress(page, progress);
       assert.equal(reverse.cloudCover, forwardCloudStates.get(progress).cloudCover,
@@ -622,6 +658,10 @@ try {
         `reverse scrub restores the same backdrop color at ${progress}`);
       assert.equal(reverse.distantStarOpacity, forwardCloudStates.get(progress).distantStarOpacity,
         `reverse scrub restores the same star opacity at ${progress}`);
+      assert.equal(reverse.cityVisible, forwardCloudStates.get(progress).cityVisible,
+        `reverse scrub restores the city-visibility gate at ${progress}`);
+      assert.equal(reverse.earthVisible, forwardCloudStates.get(progress).earthVisible,
+        `reverse scrub restores Earth visibility at ${progress}`);
       assert.deepEqual(reverse.camera, forwardCloudStates.get(progress).camera,
         `reverse scrub restores the same camera pose at ${progress}`);
     }
@@ -1015,6 +1055,33 @@ try {
       // Let resize-driven root remapping finish before direct progress test injection.
       await waitForStableSceneAndRoot(page);
 
+      await setStageProgress(page, .93);
+      await page.setViewportSize({width:412,height:844});
+      await page.waitForFunction(() => {
+        const state = window.__journeyScene.getDebugState();
+        return Math.abs(state.targetProgress - .93) < .001
+          && Math.abs(state.progress - state.targetProgress) < .00000001
+          && Math.abs(state.cloudCover - 1) < .001;
+      });
+      const afterZoomResize = await readStageState(page);
+      assert.equal(afterZoomResize.cityVisible, true,
+        'mobile viewport resize keeps city ready behind the veil at .93');
+      assert.equal(afterZoomResize.earthVisible, true,
+        'mobile viewport resize preserves Earth visibility through the .93 zoom end');
+      assert.ok(Math.abs(afterZoomResize.cloudCover - 1) < .001,
+        'mobile viewport resize preserves the still-opaque veil at .93');
+      const afterZoomEndChromeResize = await readReturnInkState(page);
+      assert.equal(afterZoomEndChromeResize.active, true,
+        'mobile viewport resize keeps return city ink active at .93');
+      assert.equal(afterZoomEndChromeResize.contact, false,
+        'mobile viewport resize keeps Contact inactive at .93');
+      await page.setViewportSize(viewport);
+      await page.waitForFunction(() => {
+        const state = window.__journeyScene.getDebugState();
+        return Math.abs(state.progress - state.targetProgress) < .00000001;
+      });
+      await waitForStableSceneAndRoot(page);
+
       await setStageProgress(page, .94);
       await page.setViewportSize({width:412,height:844});
       await page.waitForFunction(() => {
@@ -1024,7 +1091,7 @@ try {
           && Math.abs(state.progress - state.targetProgress) < .00000001
           && state.phase === 'city'
           && state.cityVisible
-          && Math.abs(state.cloudCover - 1) < .001
+          && Math.abs(state.cloudCover - .490162) < .001
           && scene.scene.background.getHex() === 0xbccfcf
           && document.body.classList.contains('is-contact')
           && !document.body.classList.contains('is-return-city-ink');
@@ -1036,10 +1103,14 @@ try {
         'mobile viewport resize keeps the city phase at .94');
       assert.equal(afterContactResize.cityVisible, true,
         'mobile viewport resize keeps the city visible at .94');
+      assert.equal(afterContactResize.earthVisible, false,
+        'mobile viewport resize preserves the Earth cutoff at .94');
       assert.equal(afterContactResize.backgroundHex, 0xbccfcf,
         'mobile viewport resize preserves the exact city backdrop at .94');
-      assert.ok(Math.abs(afterContactResize.cloudCover - 1) < .001,
-        'mobile viewport resize preserves full cloud cover at the .94 boundary');
+      assert.ok(Math.abs(afterContactResize.cloudCover - .490162) < .001,
+        'mobile viewport resize preserves partial cloud cover at the .94 boundary');
+      assert.equal(afterContactResize.distantStarOpacity, 0,
+        'mobile viewport resize preserves the completed star fade at .94');
       const afterContactChromeResize = await readReturnInkState(page);
       assert.equal(afterContactChromeResize.active, false,
         'mobile viewport resize clears temporary return ink at .94');
@@ -1047,6 +1118,43 @@ try {
         'mobile viewport resize keeps Contact styling active at .94');
       assert.equal(afterContactChromeResize.footerPlace, 'rgb(61, 89, 79)',
         'mobile viewport resize keeps the Contact footer ink at .94');
+
+      await page.setViewportSize(viewport);
+      await page.waitForFunction(() => {
+        const state = window.__journeyScene.getDebugState();
+        return Math.abs(state.progress - state.targetProgress) < .00000001;
+      });
+      await waitForStableSceneAndRoot(page);
+
+      await setStageProgress(page, .962);
+      await page.setViewportSize({width:412,height:844});
+      await page.waitForFunction(() => {
+        const scene = window.__journeyScene;
+        const state = scene.getDebugState();
+        return Math.abs(state.targetProgress - .962) < .001
+          && Math.abs(state.progress - state.targetProgress) < .00000001
+          && state.phase === 'city'
+          && state.cityVisible
+          && !state.earthVisible
+          && state.cloudCover < .001
+          && scene.scene.background.getHex() === 0xbccfcf
+          && document.body.classList.contains('is-contact')
+          && !document.body.classList.contains('is-return-city-ink');
+      });
+      const afterFadeEndResize = await readStageState(page);
+      assert.ok(Math.abs(afterFadeEndResize.progress - .962) < .001,
+        'mobile viewport resize preserves normalized progress at exact .962 cloud-fade end');
+      assert.equal(afterFadeEndResize.cityVisible, true,
+        'mobile viewport resize keeps the city visible at .962');
+      assert.equal(afterFadeEndResize.earthVisible, false,
+        'mobile viewport resize keeps Earth hidden after .94');
+      assert.ok(afterFadeEndResize.cloudCover < .001,
+        'mobile viewport resize keeps the veil clear at .962');
+      const afterFadeEndChromeResize = await readReturnInkState(page);
+      assert.equal(afterFadeEndChromeResize.active, false,
+        'mobile viewport resize keeps return ink off at .962');
+      assert.equal(afterFadeEndChromeResize.contact, true,
+        'mobile viewport resize keeps Contact active at .962');
 
       await page.setViewportSize(viewport);
       await page.waitForFunction(() => {
@@ -1289,6 +1397,7 @@ try {
       'reduced motion keeps temporary city ink disabled through .939');
     assert.deepEqual(reducedBeforeSnap.camera, reducedStart.camera, 'reduced-motion camera remains static through .939');
     assert.equal(reducedBeforeSnap.cloudCover, 0, 'reduced-motion veil remains hidden through .939');
+    assert.equal(reducedBeforeSnap.cityVisible, false, 'reduced motion keeps the voxel city hidden through raw .939');
     assert.equal(reducedBeforeSnap.backgroundHex, 0x050711, 'reduced motion holds the space backdrop through .939');
     assert.equal(reducedBeforeSnap.distantStarOpacity, .66, 'reduced motion keeps stars on their adjusted-progress curve through .939');
     const reducedContact = await setStageProgress(page, .94);
@@ -1299,6 +1408,7 @@ try {
     assert.equal(reducedContact.phase, 'city', 'reduced motion snaps to the Contact/city pose at .94');
     assert.notDeepEqual(reducedContact.camera, reducedStart.camera, 'the Contact/city pose is reached by a snap, not animated travel');
     assert.equal(reducedContact.cloudCover, 0, 'reduced motion does not cover the snapped Contact/city scene');
+    assert.equal(reducedContact.cityVisible, true, 'reduced motion shows the city on the raw .94 snap');
     assert.equal(reducedContact.backgroundHex, 0xbccfcf, 'reduced motion snaps to the exact city backdrop at .94');
     assert.equal(reducedContact.distantStarOpacity, 0, 'reduced motion completes the independent star fade at the city snap');
     assert.equal(reducedEnd.cloudCover, 0, 'reduced motion keeps the veil hidden through .976');
@@ -1335,6 +1445,29 @@ try {
       const captionVisible = viewport.width > 760 && viewport.height > 500;
       const coordinateVisible = viewport.width > 1100;
       const snapshots = new Map();
+
+      if ((viewport.width === 1440 && viewport.height === 900)
+        || (viewport.width === 390 && viewport.height === 844)
+        || (viewport.width === 844 && viewport.height === 390)) {
+        for (const progress of [.926, .93, .934, .938, .94, .944, .962]) {
+          const scene = await setStageProgress(page, progress);
+          const presentation = await readReturnInkState(page);
+          assert.ok(Math.abs(scene.cloudCover - expectedCloudCover(progress)) < .001,
+            `${viewport.width}x${viewport.height} cloud fade follows its progress curve at ${progress}`);
+          assert.equal(scene.cityVisible, true,
+            `${viewport.width}x${viewport.height} city is rendered from the inclusive .926 gate at ${progress}`);
+          assert.equal(scene.earthVisible, progress < .94,
+            `${viewport.width}x${viewport.height} Earth visibility ends at .94 at ${progress}`);
+          assert.equal(scene.distantStarOpacity, expectedDistantStarOpacity(progress),
+            `${viewport.width}x${viewport.height} star fade keeps its independent .94 boundary at ${progress}`);
+          assert.equal(presentation.active, progress < .94,
+            `${viewport.width}x${viewport.height} city ink ends at .94 at ${progress}`);
+          assert.equal(presentation.contact, progress >= .94,
+            `${viewport.width}x${viewport.height} Contact begins at .94 at ${progress}`);
+          assert.equal(scene.backgroundHex, 0xbccfcf,
+            `${viewport.width}x${viewport.height} city backdrop remains settled while clouds clear at ${progress}`);
+        }
+      }
 
       const assertChromeAt = async progress => {
         await setStageProgress(page, progress);
@@ -1479,8 +1612,8 @@ try {
     assert.ok(beforeToggle.expectedProgress >= .938 && beforeToggle.expectedProgress < .94,
       `runtime reduced-motion toggle starts in the return band: ${JSON.stringify(beforeToggle)}`);
     const beforeToggleScene = await readStageState(page);
-    assert.ok(Math.abs(beforeToggleScene.cloudCover - 1) < .001,
-      'runtime reduced-motion toggle starts with full cloud cover at .938');
+    assert.ok(Math.abs(beforeToggleScene.cloudCover - expectedCloudCover(.938)) < .001,
+      'runtime reduced-motion toggle starts with the .926–.962 cloud fade at .938');
     assert.equal(beforeToggleScene.backgroundHex,0xbccfcf,
       'runtime reduced-motion toggle starts on the city backdrop at .938');
     assert.equal((await readCityChromeState(page)).masthead.color,darkCity,
@@ -1501,11 +1634,62 @@ try {
     assert.equal(resumedMotion.returnInk,true,'runtime motion resume restores the progress-derived city state');
     assert.equal(resumedMotion.masthead.color,darkCity,'runtime motion resume restores dark masthead ink');
     const resumedScene = await readStageState(page);
-    assert.ok(Math.abs(resumedScene.cloudCover - 1) < .001,'runtime motion resume restores full cloud cover at .938');
+    assert.ok(Math.abs(resumedScene.cloudCover - expectedCloudCover(.938)) < .001,
+      'runtime motion resume restores the .926–.962 cloud fade at .938');
     assert.equal(resumedScene.backgroundHex,0xbccfcf,'runtime motion resume restores the city backdrop at .938');
     assert.deepEqual(errors,[]);
     await page.close();
     console.log('PASS Task 9 final contrast runtime reduced-motion toggle');
+  }
+
+  for (const viewport of [{width:1440,height:900},{width:390,height:844},{width:844,height:390}]) {
+    const {page,errors}=await openScenario({count:5,orbitCount:0,viewport});
+    const seen=new Map();
+    const rootCheckpoints=viewport.width===844
+      ? [.93,.934,.938,.9399,.941,.944,.962]
+      : [.93,.934,.938,.9399,.94,.944,.962];
+    for (const direction of ['forward','reverse']) {
+      const checkpoints=direction==='forward' ? rootCheckpoints : [...rootCheckpoints].reverse();
+      for (const progress of checkpoints) {
+        const root=await setRootScrollProgress(page,progress,'ceil',viewport.width===844);
+        assert.equal(root.expectedProgress>=.94,progress>=.94,
+          `${viewport.width}x${viewport.height} ${direction} root lands on requested side of Contact at ${progress}`);
+        const state=await readStageState(page);
+        const contact=await page.evaluate(()=>document.body.classList.contains('is-contact'));
+        const returnInk=await page.evaluate(()=>document.body.classList.contains('is-return-city-ink'));
+        assert.ok(Math.abs(state.cloudCover-expectedCloudCover(root.expectedProgress))<.001,
+          `${viewport.width}x${viewport.height} ${direction} root cloud cover at ${progress}`);
+        assert.equal(state.earthVisible,root.expectedProgress<.94,
+          `${viewport.width}x${viewport.height} ${direction} root Earth boundary at ${progress}`);
+        assert.equal(state.phase,root.expectedProgress>=.94?'city':'return',
+          `${viewport.width}x${viewport.height} ${direction} root scene phase at ${progress}`);
+        assert.equal(contact,root.expectedProgress>=.94,
+          `${viewport.width}x${viewport.height} ${direction} root Contact boundary at ${progress}: ${JSON.stringify({root,state,contact})}`);
+        assert.equal(returnInk,root.expectedProgress>=.926&&root.expectedProgress<.94,
+          `${viewport.width}x${viewport.height} ${direction} root return ink at ${progress}`);
+        assert.equal(state.cityVisible,true,
+          `${viewport.width}x${viewport.height} ${direction} root city remains rendered at ${progress}`);
+        if (direction==='forward') seen.set(progress,{progress:root.expectedProgress,cloudCover:state.cloudCover,earthVisible:state.earthVisible,contact});
+        else assert.ok(Math.abs(state.cloudCover-seen.get(progress).cloudCover)
+          <= Math.abs(expectedCloudCover(root.expectedProgress)-expectedCloudCover(seen.get(progress).progress))+.001,
+          `${viewport.width}x${viewport.height} reverse has no cloud-cover flash at ${progress}`);
+        if ([.934,.938,.944].includes(progress)) {
+          await page.keyboard.press('Tab');
+          await page.locator('#menu-toggle').focus();
+          const focus=await readFocusedControlState(page);
+          assert.equal(focus.focusVisible,true,`${viewport.width}x${viewport.height} focus visible at ${progress}`);
+          assert.equal(focus.outlineStyle,'solid',`${viewport.width}x${viewport.height} solid focus at ${progress}`);
+        }
+        const label=`task-11-root-${viewport.width}x${viewport.height}-${direction}-${String(progress).replace('.','_')}`;
+        await page.screenshot({path:`.superpowers/sdd/2026-10-25-journey-handoff-composition/${label}.png`});
+        if (progress===.938 || (viewport.width===844 && progress===.941)) {
+          await page.locator('#world canvas').screenshot({path:`.superpowers/sdd/2026-10-25-journey-handoff-composition/${label}-canvas.png`});
+        }
+      }
+    }
+    assert.deepEqual(errors,[]);
+    await page.close();
+    console.log(`PASS Task 11 actual root-scroll city and focus ${viewport.width}x${viewport.height}`);
   }
 } finally {
   await browser.close();

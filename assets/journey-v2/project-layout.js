@@ -6,8 +6,15 @@ const CATALOG_FADE_END = .91;
 const EARTH_ARRIVAL = .922;
 const EARTH_ZOOM_START = .926;
 const EARTH_ZOOM_END = .93;
+const CLOUD_CITY_REVEAL = .938;
+const CLOUD_FADE_END = .962;
 const RETURN_END = .94;
 const clamp = value => Math.max(0, Math.min(1, Number.isNaN(value) ? 0 : value));
+
+export function crossedProgressBoundary(previous, current, boundary) {
+  return (previous < boundary && current >= boundary)
+    || (previous >= boundary && current < boundary);
+}
 
 /** Stable positions and colors, independent of rendering and the browser. */
 export function projectOrbit(layout, index) {
@@ -40,6 +47,9 @@ export function buildProjectLayout(projectIds = []) {
     earthArrival:EARTH_ARRIVAL,
     cloudRevealStart:EARTH_ARRIVAL,
     cloudRevealEnd:EARTH_ZOOM_START,
+    cloudFadeStart:EARTH_ZOOM_START,
+    cloudFadeEnd:CLOUD_FADE_END,
+    cloudCityReveal:CLOUD_CITY_REVEAL,
     earthZoomStart:EARTH_ZOOM_START,
     earthZoomEnd:EARTH_ZOOM_END,
     returnEnd:RETURN_END,

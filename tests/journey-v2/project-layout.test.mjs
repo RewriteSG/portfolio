@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildProjectLayout, projectAtProgress, buildScrollMetrics, progressAtScroll, scrollAtProgress, sceneScrollRange } from '../../assets/journey-v2/project-layout.js';
+import { buildProjectLayout, projectAtProgress, buildScrollMetrics, progressAtScroll, scrollAtProgress, sceneScrollRange, crossedProgressBoundary } from '../../assets/journey-v2/project-layout.js';
+
+test('tiny progress steps across Contact still count as boundary crossings', () => {
+  assert.equal(crossedProgressBoundary(.9399999, .9400067, .94), true);
+  assert.equal(crossedProgressBoundary(.9400067, .9399999, .94), true);
+  assert.equal(crossedProgressBoundary(.93999, .9399999, .94), false);
+});
 
 for (const count of [0, 1, 3, 8, 64]) {
   test(`${count} projects have ordered centered stops and bounded orbit markers`, () => {
@@ -18,8 +24,12 @@ for (const count of [0, 1, 3, 8, 64]) {
     assert.equal(layout.earthArrival, .922);
     assert.equal(layout.cloudRevealStart, .922);
     assert.equal(layout.cloudRevealEnd, .926);
+    assert.equal(layout.cloudFadeStart, .926);
+    assert.equal(layout.cloudFadeEnd, .962);
+    assert.equal(layout.cloudCityReveal, .938);
     assert.equal(layout.cloudRevealStart, layout.earthArrival, 'cloud reveal begins at Earth arrival');
     assert.equal(layout.cloudRevealEnd, layout.earthZoomStart, 'cloud reveal completes when the Earth zoom begins');
+    assert.equal(layout.cloudFadeStart, layout.cloudRevealEnd, 'cloud fade starts at the completed reveal boundary');
     assert.equal(layout.earthZoomStart, .926);
     assert.equal(layout.earthZoomEnd, .93);
     assert.equal(layout.returnEnd, .94);
@@ -87,7 +97,7 @@ for (const count of [0, 1, 3]) {
         `Earth hold span ${span(layout.earthArrival, layout.earthZoomStart)} should be .9× viewport height`);
       assert.ok(Math.abs(span(layout.earthZoomStart, layout.earthZoomEnd) - .9 * height) < 1e-7,
         `Earth zoom span ${span(layout.earthZoomStart, layout.earthZoomEnd)} should be .9× viewport height`);
-      for (const progress of [layout.catalogCameraStart, layout.projectsStageStart, .90, .91, .922, .926, .93, .94]) {
+      for (const progress of [layout.catalogCameraStart, layout.projectsStageStart, .90, .91, .922, .926, .93, .94, .962]) {
         assert.ok(Math.abs(progressAtScroll(metrics, scrollAtProgress(metrics, progress)) - progress) < 1e-12,
           `progress round-trips at ${progress}`);
       }

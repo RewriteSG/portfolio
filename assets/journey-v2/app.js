@@ -1,7 +1,7 @@
 import { loadProjectManifest, resolveProjectMedia, safeEmail, safeHttpUrl } from './project-data.js';
 import { buildProjectPresentation } from './project-presentation.js';
 import { createProjectCatalog } from './project-catalog.js';
-import { buildProjectLayout, projectAtProgress, buildScrollMetrics, progressAtScroll, scrollAtProgress, sceneScrollRange } from './project-layout.js';
+import { buildProjectLayout, projectAtProgress, buildScrollMetrics, progressAtScroll, scrollAtProgress, sceneScrollRange, crossedProgressBoundary } from './project-layout.js';
 import { createProjectPages, renderProjectChapters } from './project-pages.js';
 import { JourneySettingsError, validateJourneySettings } from './settings.js';
 
@@ -476,9 +476,9 @@ function updatePresentation(progress) {
   if (isReading || failed) return;
   updateOrbit(p);
   const projectEntry = projectLayout.projectsStageStart - PROJECT_ENTRY_MARGIN;
-  const crossedProjectEntry = (previousProgress < projectEntry && p >= projectEntry)
-    || (previousProgress >= projectEntry && p < projectEntry);
-  if (Math.abs(p - previousProgress) < .000015 && !crossedProjectEntry) return;
+  const crossedProjectEntry = crossedProgressBoundary(previousProgress, p, projectEntry);
+  const crossedContact = crossedProgressBoundary(previousProgress, p, projectLayout.returnEnd);
+  if (Math.abs(p - previousProgress) < .000015 && !crossedProjectEntry && !crossedContact) return;
   previousProgress = p;
 
   let active = '';
